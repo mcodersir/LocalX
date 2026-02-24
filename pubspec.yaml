@@ -1,0 +1,48 @@
+name: localx
+description: "LocalX — Modern Development Environment Manager"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.2.1
+  window_manager: ^0.4.3
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.3.4
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  crypto: ^3.0.7
+  url_launcher: ^6.3.1
+  provider: ^6.1.2
+  file_picker: ^8.1.7
+  tray_manager: ^0.3.1
+  archive: ^3.6.1
+  package_info_plus: ^8.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/templates/
+    - assets/icons/localx.ico
+    - assets/bundles/
+    - assets/brands/frameworks/
+    - assets/brands/services/
+  fonts:
+    - family: Vazir
+      fonts:
+        - asset: assets/fonts/Vazir/Vazir-Regular.ttf
+        - asset: assets/fonts/Vazir/Vazir-Bold.ttf
+          weight: 700
