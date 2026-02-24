@@ -46,10 +46,17 @@ jobs:
         shell: powershell
         run: |
           $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          $repoRoot = (Resolve-Path ".").Path
           $sourceDir = (Resolve-Path "build\windows\x64\runner\Release").Path
-          $outputDir = (Resolve-Path ".").Path
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DAppVersion=$version" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" "tools\installer\windows\localx.iss"
+          $outputDir = $repoRoot
+          $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) {
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found."
+          }
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" "/DRepoRoot=$repoRoot" "tools\installer\windows\localx.iss"
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4

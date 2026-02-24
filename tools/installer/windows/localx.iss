@@ -14,6 +14,10 @@
   #define OutputDir "."
 #endif
 
+#ifndef RepoRoot
+  #define RepoRoot "."
+#endif
+
 [Setup]
 AppId={{B9A4F15D-5B45-47A8-8B29-5CCFD9EB72A2}
 AppName={#MyAppName}
@@ -25,10 +29,10 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-LicenseFile=LICENSE
+LicenseFile={#RepoRoot}\LICENSE
 OutputDir={#OutputDir}
 OutputBaseFilename=LocalX-windows-x64-installer
-SetupIconFile=assets\icons\localx.ico
+SetupIconFile={#RepoRoot}\assets\icons\localx.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
