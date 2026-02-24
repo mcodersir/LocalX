@@ -1,5 +1,49 @@
-Copyright (c) 2026 MCODERs
+LocalX Proprietary License
+Version 1.0
+Effective Date: February 24, 2026
 
-All rights reserved.
+Copyright (c) 2026 MCODERs. All rights reserved.
 
-No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this software, in whole or in part, without explicit prior written permission from MCODERs.
+1. Ownership
+MCODERs owns all rights, title, and interest in LocalX, including source code,
+binaries, assets, branding, documentation, and all derivative works.
+
+2. No License Grant
+No license is granted to any person or organization to use, copy, modify,
+merge, publish, distribute, sublicense, sell, lease, host, or otherwise exploit
+any part of this software.
+
+3. Restricted Actions
+Without prior written permission from MCODERs, you may not:
+- run the software in any environment;
+- copy source code or binaries;
+- create derivative works;
+- redistribute public or private builds;
+- remove, alter, or obscure legal notices;
+- use the name, logo, or brand assets of LocalX.
+
+4. Private Access Does Not Transfer Rights
+Access to this repository or to released artifacts does not transfer any usage or
+redistribution rights.
+
+5. Commercial and Internal Use
+Commercial use and internal organizational use are both prohibited unless an
+explicit written commercial license is granted by MCODERs.
+
+6. Enforcement
+Any unauthorized use is a material violation and may result in immediate legal
+action, injunctive relief, and claims for damages.
+
+7. Termination
+Any permission granted in writing is automatically terminated if any license term
+is violated.
+
+8. Warranty and Liability
+The software is provided "AS IS" without warranties of any kind. To the maximum
+extent permitted by law, MCODERs is not liable for any direct, indirect,
+incidental, special, or consequential damages.
+
+9. Contact
+Licensing requests: legal@mcoders.ir
+
+END OF TERMS

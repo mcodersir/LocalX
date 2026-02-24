@@ -1,99 +1,109 @@
-﻿# راهنمای نصب (فارسی)
+# راهنماي نصب (فارسي)
 
-این راهنما برای کاربری نوشته شده که می‌خواهد خیلی ساده و سریع LocalX را اجرا کند.
+اين سند براي نصب ساده و مطمين LocalX نوشته شده است.
 
-## نصب روی ویندوز
+## 1. پيش نيازها
 
-### 1. دانلود
+- ويندوز 10/11 نسخه x64 يا لينوکس x64
+- حداقل 4 گيگ RAM (پيشنهادي: 8 گيگ)
+- حداقل 2 گيگ فضاي خالي
+- Docker Desktop يا Docker Engine براي fallback پيشنهادي است
 
-1. وارد این لینک شو: https://github.com/mcodersir/LocalX/releases/latest
-2. فایل `LocalX-windows-x64.zip` را دانلود کن
-3. فایل `SHA256SUMS` را هم برای اعتبارسنجی دانلود کن (پیشنهادی)
+## 2. نصب روي ويندوز
 
-### 2. استخراج
+### مرحله 1: دانلود
 
-1. روی فایل ZIP راست‌کلیک کن
-2. گزینه **Extract All...** را بزن
-3. در مسیر دلخواه مثل `C:\Apps\LocalX` استخراج کن
+1. وارد شو: https://github.com/mcodersir/LocalX/releases/latest
+2. فايل `LocalX-windows-x64.zip` را دانلود کن
+3. فايل `SHA256SUMS` را هم دانلود کن
 
-### 3. اجرا
+### مرحله 2: اعتبارسنجي فايل
 
-1. وارد پوشه استخراج‌شده شو
-2. فایل `localx.exe` را اجرا کن
-3. اگر Windows Defender پیام داد، اجازه اجرا بده
+```powershell
+Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
+```
 
-### 4. راه‌اندازی اولیه
+خروجي را با مقدار داخل `SHA256SUMS` مقايسه کن.
+
+### مرحله 3: استخراج
+
+1. روي ZIP راست کليک کن
+2. **Extract All...** را بزن
+3. در مسير `C:\Apps\LocalX` يا مسير دلخواه استخراج کن
+
+### مرحله 4: اجرا
+
+1. پوشه استخراج شده را باز کن
+2. `localx.exe` را اجرا کن
+3. اگر Defender هشدار داد، فقط بعد از اعتبارسنجي فايل اجازه اجرا بده
+
+### مرحله 5: راه اندازي اوليه
 
 1. زبان و تم را انتخاب کن
-2. اجازه بده Setup Wizard سیستم را اسکن کند
-3. هر ابزار لازم که Missing است را نصب کن
-4. وارد داشبورد شو
+2. Setup Wizard را اجرا کن
+3. ابزارهاي missing را از بخش Versions نصب کن
+4. سرويس هاي لازم را از Dashboard روشن کن
 
-### 5. اجرای Administrator (در صورت نیاز)
+### مرحله 6: اجراي Administrator (اختياري)
 
-برای تغییر hosts و پورت‌های سیستمی:
+براي تغيير hosts و پورت هاي خاص:
 
-1. روی `localx.exe` راست‌کلیک کن
+1. روي `localx.exe` راست کليک کن
 2. **Run as administrator** را بزن
 
-### 6. آپدیت
+## 3. نصب روي لينوکس
 
-1. نسخه جدید ZIP را از Releases بگیر
-2. برنامه را ببند
-3. فایل‌های جدید را جایگزین قبلی کن
-4. دوباره اجرا کن
+### مرحله 1: دانلود
 
-## نصب روی لینوکس
+1. وارد شو: https://github.com/mcodersir/LocalX/releases/latest
+2. فايل `LocalX-linux-x64.tar.gz` را دانلود کن
+3. فايل `SHA256SUMS` را هم دانلود کن
 
-### 1. دانلود
+### مرحله 2: اعتبارسنجي فايل
 
-1. وارد لینک Releases شو: https://github.com/mcodersir/LocalX/releases/latest
-2. فایل `LocalX-linux-x64.tar.gz` را دانلود کن
-3. فایل `SHA256SUMS` را هم دانلود کن
+```bash
+sha256sum LocalX-linux-x64.tar.gz
+```
 
-### 2. استخراج
+خروجي را با `SHA256SUMS` مقايسه کن.
+
+### مرحله 3: استخراج
 
 ```bash
 mkdir -p ~/Apps/LocalX
 tar -xzf LocalX-linux-x64.tar.gz -C ~/Apps/LocalX
 ```
 
-### 3. اجرا
-
-```bash
-cd ~/Apps/LocalX
-./localx
-```
-
-### 4. پیش‌نیازهای احتمالی
-
-روی Ubuntu/Debian:
+### مرحله 4: نصب پيش نيازهاي سيستمي (Ubuntu/Debian)
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y libgtk-3-0 libayatana-appindicator3-1 libnotify4 libsecret-1-0
 ```
 
-## اعتبارسنجی فایل دانلودی (پیشنهادی)
-
-PowerShell ویندوز:
-
-```powershell
-Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
-```
-
-لینوکس:
+### مرحله 5: اجرا
 
 ```bash
-sha256sum LocalX-linux-x64.tar.gz
+cd ~/Apps/LocalX
+./localx
 ```
 
-خروجی را با `SHA256SUMS` مقایسه کن.
+### مرحله 6: ميانبر دسکتاپ (اختياري)
 
-## حذف برنامه
+يک فايل `.desktop` بساز که به `~/Apps/LocalX/localx` اشاره کند.
+
+## 4. آپديت
+
+1. برنامه را کامل ببند
+2. نسخه جديد را دانلود کن
+3. checksum را چک کن
+4. پوشه قبلي را با نسخه جديد جايگزين کن
+5. برنامه را دوباره اجرا کن
+
+## 5. حذف برنامه
 
 1. LocalX را کامل ببند
-2. پوشه برنامه را حذف کن
-3. در صورت نیاز داده‌های محلی را هم حذف کن:
-   - ویندوز: `%APPDATA%\LocalX`
-   - لینوکس: `~/.local/share/LocalX`
+2. پوشه برنامه را پاک کن
+3. در صورت نياز داده هاي محلي را پاک کن:
+   - ويندوز: `%APPDATA%\LocalX`
+   - لينوکس: `~/.local/share/LocalX`

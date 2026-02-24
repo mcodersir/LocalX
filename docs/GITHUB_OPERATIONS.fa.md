@@ -1,17 +1,17 @@
-﻿# عملیات GitHub (فارسی)
+# عمليات GitHub (فارسي)
 
-این سند روش حرفه‌ای مدیریت LocalX روی GitHub را توضیح می‌دهد.
+اين سند روش حرفه اي مديريت LocalX روي GitHub را مشخص مي کند.
 
-## 1. استانداردهای مخزن
+## 1. سياست مخزن
 
-1. شاخه اصلی: `main`
-2. فرمت tag: `vX.Y.Z`
-3. تریگر ریلیز: هر tag با الگوی `v*`
-4. باندل‌های حجیم با Git LFS در `assets/bundles/**`
+1. شاخه اصلي `main` است
+2. فرمت tag بايد `vX.Y.Z` باشد
+3. هر push به tag با الگوي `v*` ريليز را تريگر مي کند
+4. باندل هاي حجيم با Git LFS در `assets/bundles/**` نگهداري مي شوند
 
-## 2. جریان CI/CD
+## 2. جريان ريليز
 
-فایل Workflow:
+فايل workflow:
 
 - `.github/workflows/release.yml`
 
@@ -21,13 +21,13 @@ Jobها:
 2. `build-linux`
 3. `publish-release`
 
-خروجی‌ها:
+Assetهاي نهايي:
 
 1. `LocalX-windows-x64.zip`
 2. `LocalX-linux-x64.tar.gz`
 3. `SHA256SUMS`
 
-## 3. روش انتشار (برای Maintainer)
+## 3. رويه استاندارد انتشار
 
 ```bash
 git checkout main
@@ -36,35 +36,39 @@ git tag -a v1.2.0 -m "Release v1.2.0"
 git push origin v1.2.0
 ```
 
-بعد از push، وضعیت را اینجا چک کن:
+بعد از push اين دو صفحه را بررسي کن:
 
 - https://github.com/mcodersir/LocalX/actions
 - https://github.com/mcodersir/LocalX/releases
 
-## 4. مدیریت خطای ریلیز
+## 4. رويه Hotfix
 
-1. Run خراب‌شده را در Actions باز کن
-2. Job/Step خطادار را دقیق پیدا کن
-3. اصلاح را روی `main` اعمال کن
-4. دوباره release را با patch tag جدید منتشر کن (مثلاً `v1.2.1`)
-5. tag قدیمی را reuse نکن
+1. Run ناموفق را در Actions باز کن
+2. مرحله دقيق خطا را پيدا کن
+3. اصلاح را روي `main` اعمال کن
+4. commit جديد را push کن
+5. يک patch tag جديد منتشر کن (مثل `v1.2.1`)
 
-## 5. چک‌لیست امنیت
+هرگز tag منتشر شده قبلي را reuse نکن.
 
-1. هیچ Secret یا Token داخل کد نگذار
+## 5. چک ليست امنيت
+
+1. Token يا Secret داخل مخزن commit نکن
 2. فقط از GitHub Secrets استفاده کن
-3. در صورت نشت توکن، سریع revoke/rotate کن
-4. قبل از انتشار عمومی، چک‌سام خروجی‌ها را بررسی کن
+3. هر توکن نشت شده را فورا revoke و rotate کن
+4. قبل از اعلام عمومي، checksum فايل هاي ريليز را چک کن
+5. Branch protection براي `main` را فعال نگه دار
 
-## 6. پیشنهاد Branch Protection
+## 6. تنظيمات پيشنهادي Branch Protection
 
-1. ادغام مستقیم به `main` ممنوع (فقط PR)
-2. پاس شدن Status Checkها اجباری
-3. Force-push روی `main` غیرفعال
-4. امضای Tagها (اختیاری ولی حرفه‌ای)
+1. Merge فقط از طريق Pull Request
+2. Status check اجباري
+3. Force push روي `main` ممنوع
+4. امضاي tag براي provenance (اختياري ولي حرفه اي)
 
-## 7. فرآیند پشتیبانی
+## 7. نکات عملياتي
 
-1. باگ‌ها: Issue با مراحل بازتولید + لاگ
-2. مشکل نسخه: شماره tag + سیستم‌عامل دقیق
-3. گزارش امنیتی: ترجیحاً به‌صورت private advisory
+1. Release note را واضح بنويس: تغييرات، رفع باگ، ريسک شناخته شده
+2. در هر ريليز `SHA256SUMS` را ضميمه کن
+3. مستندات زبان هاي پشتيباني شده را همگام نگه دار
+4. وجود badge ها و متن لايسنس در README اصلي را بررسي کن

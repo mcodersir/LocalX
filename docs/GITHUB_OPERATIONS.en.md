@@ -1,15 +1,15 @@
-﻿# GitHub Operations (English)
+# GitHub Operations (English)
 
-This document explains how to run LocalX professionally on GitHub.
+This document defines the professional GitHub workflow for LocalX maintainers.
 
-## 1. Repository Standards
+## 1. Repository Policy
 
-1. Default branch: `main`
-2. Tag format: `vX.Y.Z`
-3. Release trigger: push tag matching `v*`
-4. Large bundles tracked with Git LFS (`assets/bundles/**`)
+1. Default branch is `main`
+2. Release tags must use `vX.Y.Z`
+3. A push to any `v*` tag triggers release workflow
+4. Heavy bundles are tracked with Git LFS under `assets/bundles/**`
 
-## 2. CI/CD Workflow
+## 2. Release Workflow
 
 Workflow file:
 
@@ -21,13 +21,13 @@ Jobs:
 2. `build-linux`
 3. `publish-release`
 
-Output assets:
+Published assets:
 
 1. `LocalX-windows-x64.zip`
 2. `LocalX-linux-x64.tar.gz`
 3. `SHA256SUMS`
 
-## 3. Release Procedure (Maintainer)
+## 3. Standard Release Procedure
 
 ```bash
 git checkout main
@@ -36,35 +36,39 @@ git tag -a v1.2.0 -m "Release v1.2.0"
 git push origin v1.2.0
 ```
 
-Then monitor:
+Then verify pipeline and assets:
 
 - https://github.com/mcodersir/LocalX/actions
 - https://github.com/mcodersir/LocalX/releases
 
-## 4. Handling Failed Releases
+## 4. Hotfix Procedure
 
 1. Open failed run in Actions
-2. Identify failing job and step
-3. Fix in `main`
+2. Identify exact failed step
+3. Fix issue in `main`
 4. Push fix commit
-5. Create next patch tag (`v1.2.1`), do not reuse old tag
+5. Publish a new patch tag (example: `v1.2.1`)
+
+Never reuse a previously published tag.
 
 ## 5. Security Checklist
 
-1. Never hard-code secrets in repository
-2. Use GitHub Secrets for any required credentials
-3. Rotate leaked tokens immediately
-4. Validate release checksums before announcing builds
+1. Do not commit tokens or secrets
+2. Store credentials only in GitHub Secrets
+3. Revoke and rotate any leaked token immediately
+4. Verify release checksums before public announcement
+5. Enforce branch protection rules on `main`
 
 ## 6. Recommended Branch Protection
 
-1. Require pull request before merge
-2. Require status checks to pass
-3. Restrict force-push on `main`
-4. Require signed tags for releases (optional advanced)
+1. Pull request required before merge
+2. Required status checks must pass
+3. Force push blocked on `main`
+4. Optional: signed tags for release provenance
 
-## 7. Issue and Support Workflow
+## 7. Operational Notes
 
-1. Bugs: open GitHub Issue with logs and reproduction
-2. Release regressions: include tag (`vX.Y.Z`) and OS details
-3. Security reports: use private security advisory channel when possible
+1. Keep release notes explicit: changes, fixes, known risks
+2. Attach SHA256SUMS in every release
+3. Keep docs in all supported languages synchronized
+4. Confirm license banner and badges stay consistent in root README
