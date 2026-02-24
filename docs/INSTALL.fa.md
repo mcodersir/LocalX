@@ -14,13 +14,14 @@
 ### مرحله 1: دانلود
 
 1. وارد شو: https://github.com/mcodersir/LocalX/releases/latest
-2. فايل `LocalX-windows-x64.zip` را دانلود کن
-3. فايل `SHA256SUMS` را هم دانلود کن
+2. فايل `LocalX-windows-x64-installer.exe` را دانلود کن
+3. فايل portable اختياري `LocalX-windows-x64.zip` را هم دانلود کن
+4. فايل `SHA256SUMS` را هم دانلود کن
 
 ### مرحله 2: اعتبارسنجي فايل
 
 ```powershell
-Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\LocalX-windows-x64-installer.exe -Algorithm SHA256
 ```
 
 خروجي را با مقدار داخل `SHA256SUMS` مقايسه کن.
@@ -56,13 +57,14 @@ Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
 ### مرحله 1: دانلود
 
 1. وارد شو: https://github.com/mcodersir/LocalX/releases/latest
-2. فايل `LocalX-linux-x64.tar.gz` را دانلود کن
-3. فايل `SHA256SUMS` را هم دانلود کن
+2. فايل `LocalX-linux-x64-installer.deb` را دانلود کن
+3. فايل portable اختياري `LocalX-linux-x64.tar.gz` را هم دانلود کن
+4. فايل `SHA256SUMS` را هم دانلود کن
 
 ### مرحله 2: اعتبارسنجي فايل
 
 ```bash
-sha256sum LocalX-linux-x64.tar.gz
+sha256sum LocalX-linux-x64-installer.deb
 ```
 
 خروجي را با `SHA256SUMS` مقايسه کن.

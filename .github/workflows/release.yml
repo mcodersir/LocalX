@@ -32,16 +32,32 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release
 
-      - name: Package Windows
+      - name: Package Windows Portable
         shell: powershell
         run: |
           Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath LocalX-windows-x64.zip
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build Windows Installer
+        shell: powershell
+        run: |
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          $sourceDir = (Resolve-Path "build\windows\x64\runner\Release").Path
+          $outputDir = (Resolve-Path ".").Path
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$sourceDir" "/DOutputDir=$outputDir" "tools\installer\windows\localx.iss"
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: localx-windows
-          path: LocalX-windows-x64.zip
+          path: |
+            LocalX-windows-x64.zip
+            LocalX-windows-x64-installer.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -71,15 +87,22 @@ jobs:
       - name: Build Linux
         run: flutter build linux --release
 
-      - name: Package Linux
+      - name: Package Linux Portable
         run: |
           tar -czf LocalX-linux-x64.tar.gz -C build/linux/x64/release/bundle .
+
+      - name: Build Linux Installer (DEB)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash tools/installer/linux/build_deb_installer.sh "$VERSION" "build/linux/x64/release/bundle" "."
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: localx-linux
-          path: LocalX-linux-x64.tar.gz
+          path: |
+            LocalX-linux-x64.tar.gz
+            LocalX-linux-x64-installer.deb
 
   publish-release:
     runs-on: ubuntu-latest
@@ -100,12 +123,19 @@ jobs:
       - name: Generate SHA256SUMS
         working-directory: dist
         run: |
-          sha256sum LocalX-windows-x64.zip LocalX-linux-x64.tar.gz > SHA256SUMS
+          sha256sum \
+            LocalX-windows-x64.zip \
+            LocalX-windows-x64-installer.exe \
+            LocalX-linux-x64.tar.gz \
+            LocalX-linux-x64-installer.deb \
+            > SHA256SUMS
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/LocalX-windows-x64.zip
+            dist/LocalX-windows-x64-installer.exe
             dist/LocalX-linux-x64.tar.gz
+            dist/LocalX-linux-x64-installer.deb
             dist/SHA256SUMS

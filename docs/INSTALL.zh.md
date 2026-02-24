@@ -14,13 +14,14 @@
 ### 第 1 步: 下载
 
 1. 打开: https://github.com/mcodersir/LocalX/releases/latest
-2. 下载 `LocalX-windows-x64.zip`
-3. 下载 `SHA256SUMS`
+2. 下载 `LocalX-windows-x64-installer.exe`
+3. 可选下载便携版 `LocalX-windows-x64.zip`
+4. 下载 `SHA256SUMS`
 
 ### 第 2 步: 校验完整性
 
 ```powershell
-Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\LocalX-windows-x64-installer.exe -Algorithm SHA256
 ```
 
 将输出值与 `SHA256SUMS` 对比。
@@ -56,13 +57,14 @@ Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
 ### 第 1 步: 下载
 
 1. 打开: https://github.com/mcodersir/LocalX/releases/latest
-2. 下载 `LocalX-linux-x64.tar.gz`
-3. 下载 `SHA256SUMS`
+2. 下载 `LocalX-linux-x64-installer.deb`
+3. 可选下载便携版 `LocalX-linux-x64.tar.gz`
+4. 下载 `SHA256SUMS`
 
 ### 第 2 步: 校验完整性
 
 ```bash
-sha256sum LocalX-linux-x64.tar.gz
+sha256sum LocalX-linux-x64-installer.deb
 ```
 
 将输出与 `SHA256SUMS` 对比。

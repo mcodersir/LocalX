@@ -14,27 +14,28 @@ This guide is written for first time users and focuses on a simple and reliable 
 ### Step 1: Download
 
 1. Open: https://github.com/mcodersir/LocalX/releases/latest
-2. Download `LocalX-windows-x64.zip`
-3. Download `SHA256SUMS` (recommended)
+2. Download `LocalX-windows-x64-installer.exe`
+3. Optional portable package: `LocalX-windows-x64.zip`
+4. Download `SHA256SUMS` (recommended)
 
 ### Step 2: Verify (Recommended)
 
 ```powershell
-Get-FileHash .\LocalX-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\LocalX-windows-x64-installer.exe -Algorithm SHA256
 ```
 
 Compare the output hash with `SHA256SUMS`.
 
-### Step 3: Extract
+### Step 3: Install
 
-1. Right click ZIP
-2. Select **Extract All...**
-3. Extract to `C:\Apps\LocalX` or another clean folder
+1. Right click `LocalX-windows-x64-installer.exe`
+2. Select **Run as administrator**
+3. Complete setup wizard (install path, shortcuts, launch option)
 
 ### Step 4: Run
 
-1. Open extracted folder
-2. Run `localx.exe`
+1. Open Start Menu and run `LocalX`
+2. If needed, run the desktop shortcut
 3. If Windows Defender prompts, choose **More info** then **Run anyway** only if hash check passed
 
 ### Step 5: First Launch
@@ -51,46 +52,63 @@ For hosts file updates and privileged ports:
 1. Right click `localx.exe`
 2. Choose **Run as administrator**
 
+### Step 7: Portable Alternative (No Installer)
+
+If you prefer portable mode:
+
+1. Extract `LocalX-windows-x64.zip` to a clean folder (example: `C:\Apps\LocalX`)
+2. Run `localx.exe` from extracted folder
+
 ## 3. Linux
 
 ### Step 1: Download
 
 1. Open: https://github.com/mcodersir/LocalX/releases/latest
-2. Download `LocalX-linux-x64.tar.gz`
-3. Download `SHA256SUMS` (recommended)
+2. Download `LocalX-linux-x64-installer.deb`
+3. Optional portable package: `LocalX-linux-x64.tar.gz`
+4. Download `SHA256SUMS` (recommended)
 
 ### Step 2: Verify (Recommended)
 
 ```bash
-sha256sum LocalX-linux-x64.tar.gz
+sha256sum LocalX-linux-x64-installer.deb
 ```
 
 Compare the output with `SHA256SUMS`.
 
-### Step 3: Extract
-
-```bash
-mkdir -p ~/Apps/LocalX
-tar -xzf LocalX-linux-x64.tar.gz -C ~/Apps/LocalX
-```
-
-### Step 4: Install Runtime Dependencies (Ubuntu/Debian)
+### Step 3: Install Installer Package (Ubuntu/Debian)
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y libgtk-3-0 libayatana-appindicator3-1 libnotify4 libsecret-1-0
+sudo apt-get install -y ./LocalX-linux-x64-installer.deb
+```
+
+### Step 4: Fix Dependencies (If Needed)
+
+```bash
+sudo apt-get install -f -y
 ```
 
 ### Step 5: Run
 
 ```bash
-cd ~/Apps/LocalX
-./localx
+localx
 ```
 
 ### Step 6: Optional Desktop Launcher
 
-Create a `.desktop` file pointing to `~/Apps/LocalX/localx`.
+Installer already provides desktop integration.
+
+### Step 7: Portable Alternative (No Installer)
+
+If you prefer portable mode:
+
+```bash
+mkdir -p ~/Apps/LocalX
+tar -xzf LocalX-linux-x64.tar.gz -C ~/Apps/LocalX
+cd ~/Apps/LocalX
+./localx
+```
 
 ## 4. Update Procedure
 

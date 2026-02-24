@@ -38,7 +38,9 @@ Professional, real-first local development environment manager for **Windows** a
 
 - Download: https://github.com/mcodersir/LocalX/releases/latest
 - Release assets:
+  - `LocalX-windows-x64-installer.exe`
   - `LocalX-windows-x64.zip`
+  - `LocalX-linux-x64-installer.deb`
   - `LocalX-linux-x64.tar.gz`
   - `SHA256SUMS`
 

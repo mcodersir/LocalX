@@ -54,9 +54,11 @@ flutter test
 
 هر tag با الگوي `v*` اين فايل ها را منتشر مي کند:
 
-1. `LocalX-windows-x64.zip`
-2. `LocalX-linux-x64.tar.gz`
-3. `SHA256SUMS`
+1. `LocalX-windows-x64-installer.exe`
+2. `LocalX-windows-x64.zip`
+3. `LocalX-linux-x64-installer.deb`
+4. `LocalX-linux-x64.tar.gz`
+5. `SHA256SUMS`
 
 ## 6. امنيت و يکپارچگي
 

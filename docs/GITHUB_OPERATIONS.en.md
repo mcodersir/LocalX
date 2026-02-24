@@ -23,9 +23,11 @@ Jobs:
 
 Published assets:
 
-1. `LocalX-windows-x64.zip`
-2. `LocalX-linux-x64.tar.gz`
-3. `SHA256SUMS`
+1. `LocalX-windows-x64-installer.exe`
+2. `LocalX-windows-x64.zip`
+3. `LocalX-linux-x64-installer.deb`
+4. `LocalX-linux-x64.tar.gz`
+5. `SHA256SUMS`
 
 ## 3. Standard Release Procedure
 
