@@ -39,7 +39,9 @@ class SoftwareVersions {
     switch (software) {
       case 'PHP':
         if (Platform.isWindows) {
-          final vs = version.startsWith('8.4') || version.startsWith('8.5') ? 'vs17' : 'vs16';
+          final vs = version.startsWith('8.4') || version.startsWith('8.5')
+              ? 'vs17'
+              : 'vs16';
           return 'https://windows.php.net/downloads/releases/php-$version-Win32-$vs-x64.zip';
         }
         return 'https://www.php.net/distributions/php-$version.tar.xz';
@@ -74,10 +76,9 @@ class SoftwareVersions {
         }
         return 'https://ftp.postgresql.org/pub/source/v$version/postgresql-$version.tar.gz';
       case 'Memcached':
-        // Memcached isn't officially supported on Windows natively anymore, using a community build for illustration
-        if (Platform.isWindows) {
-          return 'https://github.com/nono303/memcached/releases/download/v$version/memcached-$version-win64.zip';
-        }
+        // Native Windows binaries are not officially maintained for modern Memcached.
+        // LocalX uses Docker fallback for Windows runtime when native binary is unavailable.
+        if (Platform.isWindows) return '';
         return 'https://memcached.org/files/memcached-$version.tar.gz';
       case 'Mailhog':
         if (Platform.isWindows) {
@@ -107,14 +108,22 @@ class SoftwareVersions {
     'Apache': 'https://httpd.apache.org/download.cgi',
     'Redis': 'https://github.com/redis/redis/releases/',
     'PostgreSQL': 'https://www.enterprisedb.com/download-postgresql-binaries',
-    'Memcached': 'https://github.com/nono303/memcached/releases',
+    'Memcached': 'https://memcached.org/downloads',
     'Mailhog': 'https://github.com/mailhog/MailHog/releases',
     'SMTP': 'https://github.com/axllent/mailpit/releases',
     'WebSocket': 'https://github.com/vi/websocat/releases',
   };
 }
 
-enum InstallStatus { idle, downloading, extracting, configuring, done, error }
+enum InstallStatus {
+  idle,
+  downloading,
+  extracting,
+  configuring,
+  done,
+  canceled,
+  error,
+}
 
 class InstallProgress {
   final String software;
@@ -193,6 +202,8 @@ class VersionManager extends ChangeNotifier {
   bool _isScanning = false;
   String _localxHome = '';
   final Map<String, InstallProgress> _installProgress = {};
+  final Map<String, HttpClient> _activeDownloadClients = {};
+  final Set<String> _cancelledInstalls = {};
   List<BundleManifestEntry>? _bundleManifest;
 
   Map<String, VersionInfo> get installed => Map.unmodifiable(_installed);
@@ -201,7 +212,8 @@ class VersionManager extends ChangeNotifier {
   String get selectedNodeVersion => _selectedNodeVersion;
   bool get isScanning => _isScanning;
   String get localxHome => _localxHome;
-  Map<String, InstallProgress> get installProgress => Map.unmodifiable(_installProgress);
+  Map<String, InstallProgress> get installProgress =>
+      Map.unmodifiable(_installProgress);
 
   VersionManager() {
     _initHome();
@@ -209,22 +221,55 @@ class VersionManager extends ChangeNotifier {
   }
 
   Future<void> _initHome() async {
-    final appDir = await getApplicationSupportDirectory();
-    _localxHome = '${appDir.path}${Platform.pathSeparator}LocalX';
+    _localxHome = await _resolvePreferredHome();
     final dir = Directory(_localxHome);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     // Create version subdirectories
-    for (final sw in ['php', 'python', 'nodejs', 'mysql', 'redis', 'apache', 'postgres', 'memcached', 'mailhog', 'smtp', 'websocket']) {
+    for (final sw in [
+      'php',
+      'python',
+      'nodejs',
+      'mysql',
+      'redis',
+      'apache',
+      'postgres',
+      'memcached',
+      'mailhog',
+      'smtp',
+      'websocket',
+    ]) {
       final swDir = Directory('$_localxHome${Platform.pathSeparator}$sw');
       if (!await swDir.exists()) {
         await swDir.create(recursive: true);
       }
     }
-    final bundlesDir = Directory('$_localxHome${Platform.pathSeparator}bundles');
+    final bundlesDir = Directory(
+      '$_localxHome${Platform.pathSeparator}bundles',
+    );
     if (!await bundlesDir.exists()) {
       await bundlesDir.create(recursive: true);
+    }
+  }
+
+  Future<String> _resolvePreferredHome() async {
+    final appDir = await getApplicationSupportDirectory();
+    final appSupportHome = '${appDir.path}${Platform.pathSeparator}LocalX';
+
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final installHome = '$exeDir${Platform.pathSeparator}LocalXData';
+      final probeDir = Directory(installHome);
+      await probeDir.create(recursive: true);
+      final probeFile = File(
+        '${probeDir.path}${Platform.pathSeparator}.write_test',
+      );
+      await probeFile.writeAsString('ok', flush: true);
+      await probeFile.delete();
+      return installHome;
+    } catch (_) {
+      return appSupportHome;
     }
   }
 
@@ -237,11 +282,16 @@ class VersionManager extends ChangeNotifier {
     try {
       final phpResult = await Process.run('php', ['-v']);
       if (phpResult.exitCode == 0) {
-        final match = RegExp(r'PHP (\d+\.\d+\.\d+)').firstMatch(phpResult.stdout.toString());
+        final match = RegExp(
+          r'PHP (\d+\.\d+\.\d+)',
+        ).firstMatch(phpResult.stdout.toString());
         if (match != null) {
           _selectedPhpVersion = match.group(1)!;
           // Get path
-          final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['php']);
+          final which = await Process.run(
+            Platform.isWindows ? 'where' : 'which',
+            ['php'],
+          );
           _installed['PHP'] = VersionInfo(
             software: 'PHP',
             version: match.group(1)!,
@@ -251,7 +301,11 @@ class VersionManager extends ChangeNotifier {
         }
       }
     } catch (_) {
-      _installed['PHP'] = VersionInfo(software: 'PHP', version: 'Not found', isInstalled: false);
+      _installed['PHP'] = VersionInfo(
+        software: 'PHP',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Python
@@ -264,7 +318,10 @@ class VersionManager extends ChangeNotifier {
         final match = RegExp(r'Python (\d+\.\d+\.\d+)').firstMatch(output);
         if (match != null) {
           _selectedPythonVersion = match.group(1)!;
-          final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['python']);
+          final which = await Process.run(
+            Platform.isWindows ? 'where' : 'which',
+            ['python'],
+          );
           _installed['Python'] = VersionInfo(
             software: 'Python',
             version: _selectedPythonVersion,
@@ -274,15 +331,25 @@ class VersionManager extends ChangeNotifier {
         }
       }
     } catch (_) {
-      _installed['Python'] = VersionInfo(software: 'Python', version: 'Not found', isInstalled: false);
+      _installed['Python'] = VersionInfo(
+        software: 'Python',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Node.js
     try {
       final nodeResult = await Process.run('node', ['-v']);
       if (nodeResult.exitCode == 0) {
-        _selectedNodeVersion = nodeResult.stdout.toString().trim().replaceFirst('v', '');
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['node']);
+        _selectedNodeVersion = nodeResult.stdout.toString().trim().replaceFirst(
+          'v',
+          '',
+        );
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['node'],
+        );
         _installed['Node.js'] = VersionInfo(
           software: 'Node.js',
           version: _selectedNodeVersion,
@@ -291,15 +358,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['Node.js'] = VersionInfo(software: 'Node.js', version: 'Not found', isInstalled: false);
+      _installed['Node.js'] = VersionInfo(
+        software: 'Node.js',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect MySQL
     try {
       final mysqlResult = await Process.run('mysql', ['--version']);
       if (mysqlResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(mysqlResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['mysql']);
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(mysqlResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['mysql'],
+        );
         _installed['MySQL'] = VersionInfo(
           software: 'MySQL',
           version: match?.group(1) ?? 'Unknown',
@@ -308,14 +384,20 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['MySQL'] = VersionInfo(software: 'MySQL', version: 'Not found', isInstalled: false);
+      _installed['MySQL'] = VersionInfo(
+        software: 'MySQL',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Redis
     try {
       final redisResult = await Process.run('redis-server', ['--version']);
       if (redisResult.exitCode == 0) {
-        final match = RegExp(r'v=(\d+\.\d+\.\d+)').firstMatch(redisResult.stdout.toString());
+        final match = RegExp(
+          r'v=(\d+\.\d+\.\d+)',
+        ).firstMatch(redisResult.stdout.toString());
         _installed['Redis'] = VersionInfo(
           software: 'Redis',
           version: match?.group(1) ?? 'Unknown',
@@ -323,16 +405,23 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['Redis'] = VersionInfo(software: 'Redis', version: 'Not found', isInstalled: false);
+      _installed['Redis'] = VersionInfo(
+        software: 'Redis',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Apache
     try {
       final apacheResult = await Process.run(
-        Platform.isWindows ? 'httpd' : 'apachectl', ['-v'],
+        Platform.isWindows ? 'httpd' : 'apachectl',
+        ['-v'],
       );
       if (apacheResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(apacheResult.stdout.toString());
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(apacheResult.stdout.toString());
         _installed['Apache'] = VersionInfo(
           software: 'Apache',
           version: match?.group(1) ?? 'Unknown',
@@ -340,15 +429,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['Apache'] = VersionInfo(software: 'Apache', version: 'Not found', isInstalled: false);
+      _installed['Apache'] = VersionInfo(
+        software: 'Apache',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect PostgreSQL
     try {
       final psqlResult = await Process.run('psql', ['-V']);
       if (psqlResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+(\.\d+)?)').firstMatch(psqlResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['psql']);
+        final match = RegExp(
+          r'(\d+\.\d+(\.\d+)?)',
+        ).firstMatch(psqlResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['psql'],
+        );
         _installed['PostgreSQL'] = VersionInfo(
           software: 'PostgreSQL',
           version: match?.group(1) ?? 'Unknown',
@@ -357,15 +455,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['PostgreSQL'] = VersionInfo(software: 'PostgreSQL', version: 'Not found', isInstalled: false);
+      _installed['PostgreSQL'] = VersionInfo(
+        software: 'PostgreSQL',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Memcached
     try {
       final memResult = await Process.run('memcached', ['-h']);
       if (memResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(memResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['memcached']);
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(memResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['memcached'],
+        );
         _installed['Memcached'] = VersionInfo(
           software: 'Memcached',
           version: match?.group(1) ?? 'Unknown',
@@ -374,15 +481,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['Memcached'] = VersionInfo(software: 'Memcached', version: 'Not found', isInstalled: false);
+      _installed['Memcached'] = VersionInfo(
+        software: 'Memcached',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect Mailhog
     try {
       final mailResult = await Process.run('MailHog', ['-version']);
       if (mailResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(mailResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['MailHog']);
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(mailResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['MailHog'],
+        );
         _installed['Mailhog'] = VersionInfo(
           software: 'Mailhog',
           version: match?.group(1) ?? 'Unknown',
@@ -391,15 +507,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['Mailhog'] = VersionInfo(software: 'Mailhog', version: 'Not found', isInstalled: false);
+      _installed['Mailhog'] = VersionInfo(
+        software: 'Mailhog',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect SMTP (Mailpit)
     try {
       final smtpResult = await Process.run('mailpit', ['--version']);
       if (smtpResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(smtpResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['mailpit']);
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(smtpResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['mailpit'],
+        );
         _installed['SMTP'] = VersionInfo(
           software: 'SMTP',
           version: match?.group(1) ?? 'Unknown',
@@ -408,15 +533,24 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['SMTP'] = VersionInfo(software: 'SMTP', version: 'Not found', isInstalled: false);
+      _installed['SMTP'] = VersionInfo(
+        software: 'SMTP',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Detect WebSocket (websocat)
     try {
       final wsResult = await Process.run('websocat', ['--version']);
       if (wsResult.exitCode == 0) {
-        final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(wsResult.stdout.toString());
-        final which = await Process.run(Platform.isWindows ? 'where' : 'which', ['websocat']);
+        final match = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(wsResult.stdout.toString());
+        final which = await Process.run(
+          Platform.isWindows ? 'where' : 'which',
+          ['websocat'],
+        );
         _installed['WebSocket'] = VersionInfo(
           software: 'WebSocket',
           version: match?.group(1) ?? 'Unknown',
@@ -425,7 +559,11 @@ class VersionManager extends ChangeNotifier {
         );
       }
     } catch (_) {
-      _installed['WebSocket'] = VersionInfo(software: 'WebSocket', version: 'Not found', isInstalled: false);
+      _installed['WebSocket'] = VersionInfo(
+        software: 'WebSocket',
+        version: 'Not found',
+        isInstalled: false,
+      );
     }
 
     // Also scan LocalX-managed versions
@@ -442,7 +580,10 @@ class VersionManager extends ChangeNotifier {
     for (final sw in ['php', 'python', 'nodejs']) {
       final swDir = Directory('$_localxHome${Platform.pathSeparator}$sw');
       if (await swDir.exists()) {
-        final subdirs = await swDir.list().where((e) => e is Directory).toList();
+        final subdirs = await swDir
+            .list()
+            .where((e) => e is Directory)
+            .toList();
         for (final dir in subdirs) {
           final versionDir = dir.path.split(Platform.pathSeparator).last;
           debugPrint('[VersionManager] Found local $sw version: $versionDir');
@@ -459,7 +600,10 @@ class VersionManager extends ChangeNotifier {
 
   List<String> _bundleCandidates(String version, String effectiveVersion) {
     final suffix = _platformSuffix();
-    final versions = <String>{version, effectiveVersion}.where((v) => v.isNotEmpty);
+    final versions = <String>{
+      version,
+      effectiveVersion,
+    }.where((v) => v.isNotEmpty);
     const exts = ['.zip', '.tar.gz', '.tgz', '.tar.xz', '.tar', '.exe', '.bin'];
     final out = <String>[];
     for (final v in versions) {
@@ -486,7 +630,8 @@ class VersionManager extends ChangeNotifier {
     }
   }
 
-  String _platformName() => Platform.isWindows ? 'windows' : (Platform.isLinux ? 'linux' : '');
+  String _platformName() =>
+      Platform.isWindows ? 'windows' : (Platform.isLinux ? 'linux' : '');
 
   Future<BundleManifestEntry?> _findManifestEntry(
     String software,
@@ -494,7 +639,10 @@ class VersionManager extends ChangeNotifier {
     String effectiveVersion,
   ) async {
     await _ensureBundleManifestLoaded();
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
     final platform = _platformName();
     final versions = <String>{version, effectiveVersion};
     for (final entry in _bundleManifest ?? const <BundleManifestEntry>[]) {
@@ -514,10 +662,19 @@ class VersionManager extends ChangeNotifier {
     return _sha256Bytes(bytes);
   }
 
-  Future<String?> _findLocalBundle(String software, String version, String effectiveVersion) async {
+  Future<String?> _findLocalBundle(
+    String software,
+    String version,
+    String effectiveVersion,
+  ) async {
     if (_localxHome.isEmpty) return null;
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
-    final bundlesDir = Directory('$_localxHome${Platform.pathSeparator}bundles${Platform.pathSeparator}$swKey');
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
+    final bundlesDir = Directory(
+      '$_localxHome${Platform.pathSeparator}bundles${Platform.pathSeparator}$swKey',
+    );
     if (!await bundlesDir.exists()) return null;
 
     for (final candidate in _bundleCandidates(version, effectiveVersion)) {
@@ -527,8 +684,16 @@ class VersionManager extends ChangeNotifier {
     return null;
   }
 
-  Future<BundleData?> _findEmbeddedBundle(String software, String version, String effectiveVersion) async {
-    final manifestEntry = await _findManifestEntry(software, version, effectiveVersion);
+  Future<BundleData?> _findEmbeddedBundle(
+    String software,
+    String version,
+    String effectiveVersion,
+  ) async {
+    final manifestEntry = await _findManifestEntry(
+      software,
+      version,
+      effectiveVersion,
+    );
     if (manifestEntry != null) {
       final assetPath = 'assets/bundles/${manifestEntry.archive}';
       try {
@@ -543,7 +708,10 @@ class VersionManager extends ChangeNotifier {
       } catch (_) {}
     }
 
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
     for (final candidate in _bundleCandidates(version, effectiveVersion)) {
       final assetPath = 'assets/bundles/$swKey/$candidate';
       try {
@@ -554,8 +722,14 @@ class VersionManager extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _downloadFile(String url, String destPath, InstallProgress progress) async {
+  Future<void> _downloadFileWithKey(
+    String key,
+    String url,
+    String destPath,
+    InstallProgress progress,
+  ) async {
     final client = HttpClient();
+    _activeDownloadClients[key] = client;
     final request = await client.getUrl(Uri.parse(url));
     request.followRedirects = true;
     request.maxRedirects = 5;
@@ -576,23 +750,74 @@ class VersionManager extends ChangeNotifier {
     final file = File(destPath);
     final sink = file.openWrite();
     int received = 0;
-    await for (final chunk in response) {
-      received += chunk.length;
-      sink.add(chunk);
-      progress.downloadedBytes = received;
-      if (total > 0) {
-        final pct = received / total;
-        progress.progress = (pct * 0.6).clamp(0.05, 0.6);
-        progress.message = 'Downloading ${_formatBytes(received)} / ${_formatBytes(total)} (${(pct * 100).toStringAsFixed(0)}%)';
-      } else {
-        progress.progress = 0.2;
-        progress.message = 'Downloading ${_formatBytes(received)}';
+    try {
+      await for (final chunk in response) {
+        _throwIfCancelled(key);
+        received += chunk.length;
+        sink.add(chunk);
+        progress.downloadedBytes = received;
+        if (total > 0) {
+          final pct = received / total;
+          progress.progress = (pct * 0.6).clamp(0.05, 0.6);
+          progress.message =
+              'Downloading ${_formatBytes(received)} / ${_formatBytes(total)} (${(pct * 100).toStringAsFixed(0)}%)';
+        } else {
+          progress.progress = 0.2;
+          progress.message = 'Downloading ${_formatBytes(received)}';
+        }
+        notifyListeners();
       }
-      notifyListeners();
+      await sink.flush();
+    } finally {
+      await sink.close();
+      _activeDownloadClients.remove(key)?.close(force: true);
+      client.close(force: true);
     }
-    await sink.flush();
-    await sink.close();
-    client.close();
+    _throwIfCancelled(key);
+  }
+
+  Future<String> _resolveValidatedDownloadUrl(
+    String software,
+    String effectiveVersion,
+  ) async {
+    final url = SoftwareVersions.getDownloadUrl(software, effectiveVersion);
+    if (url.isEmpty) {
+      throw Exception(
+        'No direct download is available for $software on this platform. '
+        'Use ${SoftwareVersions.downloadPageUrls[software] ?? 'vendor website'}',
+      );
+    }
+
+    final uri = Uri.parse(url);
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(uri);
+      request.headers.set('User-Agent', 'LocalX');
+      request.headers.set('Range', 'bytes=0-0');
+      final response = await request.close().timeout(
+        const Duration(seconds: 12),
+      );
+      if (response.statusCode == 200 ||
+          response.statusCode == 206 ||
+          (response.statusCode >= 300 && response.statusCode < 400)) {
+        return url;
+      }
+      throw Exception('Link check failed with status ${response.statusCode}');
+    } catch (_) {
+      throw Exception(
+        'Download link for $software $effectiveVersion is unreachable right now. '
+        'Use ${SoftwareVersions.downloadPageUrls[software] ?? 'official download page'} and retry.',
+      );
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  void _throwIfCancelled(String key) {
+    if (_cancelledInstalls.contains(key)) {
+      throw _InstallCancelledException();
+    }
   }
 
   String _baseName(String path) {
@@ -612,19 +837,35 @@ class VersionManager extends ChangeNotifier {
     final lower = archivePath.toLowerCase();
     if (lower.endsWith('.zip')) {
       if (Platform.isWindows) {
-        final extractResult = await Process.run(
-          'powershell',
-          ['-Command', 'Expand-Archive', '-Path', archivePath, '-DestinationPath', installDir, '-Force'],
-          runInShell: true,
-        );
+        final extractResult = await Process.run('powershell', [
+          '-Command',
+          'Expand-Archive',
+          '-Path',
+          archivePath,
+          '-DestinationPath',
+          installDir,
+          '-Force',
+        ], runInShell: true);
         if (extractResult.exitCode == 0) return;
-        final fallback = await Process.run('tar', ['-xf', archivePath, '-C', installDir]);
+        final fallback = await Process.run('tar', [
+          '-xf',
+          archivePath,
+          '-C',
+          installDir,
+        ]);
         if (fallback.exitCode != 0) {
-          throw Exception('Extraction failed: ${extractResult.stderr}\n${fallback.stderr}');
+          throw Exception(
+            'Extraction failed: ${extractResult.stderr}\n${fallback.stderr}',
+          );
         }
         return;
       }
-      final extractResult = await Process.run('unzip', ['-o', archivePath, '-d', installDir]);
+      final extractResult = await Process.run('unzip', [
+        '-o',
+        archivePath,
+        '-d',
+        installDir,
+      ]);
       if (extractResult.exitCode != 0) {
         throw Exception('Extraction failed: ${extractResult.stderr}');
       }
@@ -632,7 +873,12 @@ class VersionManager extends ChangeNotifier {
     }
 
     if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
-      final extractResult = await Process.run('tar', ['-xzf', archivePath, '-C', installDir]);
+      final extractResult = await Process.run('tar', [
+        '-xzf',
+        archivePath,
+        '-C',
+        installDir,
+      ]);
       if (extractResult.exitCode != 0) {
         throw Exception('Extraction failed: ${extractResult.stderr}');
       }
@@ -640,7 +886,12 @@ class VersionManager extends ChangeNotifier {
     }
 
     if (lower.endsWith('.tar.xz')) {
-      final extractResult = await Process.run('tar', ['-xJf', archivePath, '-C', installDir]);
+      final extractResult = await Process.run('tar', [
+        '-xJf',
+        archivePath,
+        '-C',
+        installDir,
+      ]);
       if (extractResult.exitCode != 0) {
         throw Exception('Extraction failed: ${extractResult.stderr}');
       }
@@ -648,7 +899,12 @@ class VersionManager extends ChangeNotifier {
     }
 
     if (lower.endsWith('.tar')) {
-      final extractResult = await Process.run('tar', ['-xf', archivePath, '-C', installDir]);
+      final extractResult = await Process.run('tar', [
+        '-xf',
+        archivePath,
+        '-C',
+        installDir,
+      ]);
       if (extractResult.exitCode != 0) {
         throw Exception('Extraction failed: ${extractResult.stderr}');
       }
@@ -661,6 +917,7 @@ class VersionManager extends ChangeNotifier {
   /// Download and install a specific version
   Future<bool> installVersion(String software, String version) async {
     final key = '$software-$version';
+    _cancelledInstalls.remove(key);
     _installProgress[key] = InstallProgress(
       software: software,
       version: version,
@@ -670,7 +927,10 @@ class VersionManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
+      final swKey = software
+          .toLowerCase()
+          .replaceAll('.', '')
+          .replaceAll(' ', '');
       var effectiveVersion = version;
       if (_localxHome.isEmpty) {
         await _initHome();
@@ -684,15 +944,32 @@ class VersionManager extends ChangeNotifier {
       embeddedBundle = await _findEmbeddedBundle(software, version, version);
       manifestEntry = await _findManifestEntry(software, version, version);
 
-      if (software == 'Node.js' && version.endsWith('.x') && localBundle == null && embeddedBundle == null) {
+      if (software == 'Node.js' &&
+          version.endsWith('.x') &&
+          localBundle == null &&
+          embeddedBundle == null) {
         effectiveVersion = await _resolveNodeVersion(version);
-        localBundle = await _findLocalBundle(software, version, effectiveVersion);
-        embeddedBundle = await _findEmbeddedBundle(software, version, effectiveVersion);
-        manifestEntry = await _findManifestEntry(software, version, effectiveVersion);
+        localBundle = await _findLocalBundle(
+          software,
+          version,
+          effectiveVersion,
+        );
+        embeddedBundle = await _findEmbeddedBundle(
+          software,
+          version,
+          effectiveVersion,
+        );
+        manifestEntry = await _findManifestEntry(
+          software,
+          version,
+          effectiveVersion,
+        );
       }
-      final installDir = '$_localxHome${Platform.pathSeparator}$swKey${Platform.pathSeparator}$version';
+      final installDir =
+          '$_localxHome${Platform.pathSeparator}$swKey${Platform.pathSeparator}$version';
 
       await Directory(installDir).create(recursive: true);
+      _throwIfCancelled(key);
 
       String fileName;
       if (localBundle != null) {
@@ -700,7 +977,10 @@ class VersionManager extends ChangeNotifier {
       } else if (embeddedBundle != null) {
         fileName = embeddedBundle.name;
       } else {
-        final url = SoftwareVersions.getDownloadUrl(software, effectiveVersion);
+        final url = await _resolveValidatedDownloadUrl(
+          software,
+          effectiveVersion,
+        );
         if (url.isEmpty) {
           throw Exception('No download URL available for $software $version');
         }
@@ -710,41 +990,64 @@ class VersionManager extends ChangeNotifier {
       }
 
       final downloadPath = '$installDir${Platform.pathSeparator}$fileName';
-      var installMode = manifestEntry?.installMode ?? embeddedBundle?.installMode ?? 'archive';
+      var installMode =
+          manifestEntry?.installMode ??
+          embeddedBundle?.installMode ??
+          'archive';
 
       if (localBundle != null) {
         _installProgress[key]!.status = InstallStatus.downloading;
-        _installProgress[key]!.message = 'Using bundled $software $effectiveVersion...';
+        _installProgress[key]!.message =
+            'Using bundled $software $effectiveVersion...';
         _installProgress[key]!.progress = 0.2;
         notifyListeners();
         await File(localBundle).copy(downloadPath);
       } else if (embeddedBundle != null) {
         _installProgress[key]!.status = InstallStatus.downloading;
-        _installProgress[key]!.message = 'Using embedded $software $effectiveVersion...';
+        _installProgress[key]!.message =
+            'Using embedded $software $effectiveVersion...';
         _installProgress[key]!.progress = 0.2;
         notifyListeners();
-        await File(downloadPath).writeAsBytes(embeddedBundle.bytes, flush: true);
+        await File(
+          downloadPath,
+        ).writeAsBytes(embeddedBundle.bytes, flush: true);
       } else {
-        final url = SoftwareVersions.getDownloadUrl(software, effectiveVersion);
-        await _downloadFile(url, downloadPath, _installProgress[key]!);
+        final url = await _resolveValidatedDownloadUrl(
+          software,
+          effectiveVersion,
+        );
+        await _downloadFileWithKey(
+          key,
+          url,
+          downloadPath,
+          _installProgress[key]!,
+        );
       }
+      _throwIfCancelled(key);
 
       if (manifestEntry != null) {
         final digest = await _sha256File(downloadPath);
         if (digest != manifestEntry.sha256) {
-          throw Exception('Bundle checksum mismatch for ${manifestEntry.archive}');
+          throw Exception(
+            'Bundle checksum mismatch for ${manifestEntry.archive}',
+          );
         }
       } else if (embeddedBundle?.sha256 != null) {
         final digest = await _sha256File(downloadPath);
         if (digest != embeddedBundle!.sha256) {
-          throw Exception('Embedded bundle checksum mismatch for ${embeddedBundle.name}');
+          throw Exception(
+            'Embedded bundle checksum mismatch for ${embeddedBundle.name}',
+          );
         }
       }
 
-      final shouldExtract = installMode == 'archive' && _isArchiveFile(downloadPath);
+      final shouldExtract =
+          installMode == 'archive' && _isArchiveFile(downloadPath);
       if (!shouldExtract) {
+        _throwIfCancelled(key);
         _installProgress[key]!.status = InstallStatus.configuring;
-        _installProgress[key]!.message = 'Configuring $software $effectiveVersion...';
+        _installProgress[key]!.message =
+            'Configuring $software $effectiveVersion...';
         _installProgress[key]!.progress = 0.9;
         notifyListeners();
 
@@ -756,35 +1059,43 @@ class VersionManager extends ChangeNotifier {
         );
 
         _installProgress[key]!.status = InstallStatus.done;
-        _installProgress[key]!.message = '$software $effectiveVersion installed successfully!';
+        _installProgress[key]!.message =
+            '$software $effectiveVersion installed successfully!';
         _installProgress[key]!.progress = 1.0;
         notifyListeners();
         return true;
       }
 
       _installProgress[key]!.status = InstallStatus.extracting;
-      _installProgress[key]!.message = 'Extracting $software $effectiveVersion...';
+      _installProgress[key]!.message =
+          'Extracting $software $effectiveVersion...';
       _installProgress[key]!.progress = 0.7;
       notifyListeners();
 
       await _extractArchive(downloadPath, installDir);
+      _throwIfCancelled(key);
 
       try {
         await File(downloadPath).delete();
       } catch (_) {}
 
       _installProgress[key]!.status = InstallStatus.configuring;
-      _installProgress[key]!.message = 'Configuring $software $effectiveVersion...';
+      _installProgress[key]!.message =
+          'Configuring $software $effectiveVersion...';
       _installProgress[key]!.progress = 0.9;
       notifyListeners();
 
       var resolvedVersion = effectiveVersion;
       if (software == 'Node.js' && version.endsWith('.x')) {
         try {
-          final subdirs = await Directory(installDir).list().where((e) => e is Directory).toList();
+          final subdirs = await Directory(
+            installDir,
+          ).list().where((e) => e is Directory).toList();
           for (final entry in subdirs) {
             if (entry is Directory && entry.path.contains('node')) {
-              final match = RegExp(r'node-v(\d+\.\d+\.\d+)').firstMatch(entry.path);
+              final match = RegExp(
+                r'node-v(\d+\.\d+\.\d+)',
+              ).firstMatch(entry.path);
               if (match != null) {
                 resolvedVersion = match.group(1)!;
                 break;
@@ -802,16 +1113,38 @@ class VersionManager extends ChangeNotifier {
       );
 
       _installProgress[key]!.status = InstallStatus.done;
-      _installProgress[key]!.message = '$software $effectiveVersion installed successfully!';
+      _installProgress[key]!.message =
+          '$software $effectiveVersion installed successfully!';
       _installProgress[key]!.progress = 1.0;
       notifyListeners();
+      _cancelledInstalls.remove(key);
+      _activeDownloadClients.remove(key);
 
       return true;
+    } on _InstallCancelledException {
+      _installProgress[key]!.status = InstallStatus.canceled;
+      _installProgress[key]!.message = 'Installation canceled';
+      _installProgress[key]!.error = '';
+      notifyListeners();
+      _activeDownloadClients.remove(key)?.close(force: true);
+      _cancelledInstalls.remove(key);
+      return false;
     } catch (e) {
+      if (_cancelledInstalls.contains(key)) {
+        _installProgress[key]!.status = InstallStatus.canceled;
+        _installProgress[key]!.message = 'Installation canceled';
+        _installProgress[key]!.error = '';
+        notifyListeners();
+        _activeDownloadClients.remove(key)?.close(force: true);
+        _cancelledInstalls.remove(key);
+        return false;
+      }
       _installProgress[key]!.status = InstallStatus.error;
       _installProgress[key]!.error = e.toString();
       _installProgress[key]!.message = 'Failed to install $software $version';
       notifyListeners();
+      _activeDownloadClients.remove(key)?.close(force: true);
+      _cancelledInstalls.remove(key);
       return false;
     }
   }
@@ -830,8 +1163,12 @@ class VersionManager extends ChangeNotifier {
 
   /// Switch active version of a software (updates PATH)
   Future<bool> switchVersion(String software, String version) async {
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
-    final versionDir = '$_localxHome${Platform.pathSeparator}$swKey${Platform.pathSeparator}$version';
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
+    final versionDir =
+        '$_localxHome${Platform.pathSeparator}$swKey${Platform.pathSeparator}$version';
 
     if (!await Directory(versionDir).exists()) {
       debugPrint('[VersionManager] Version directory not found: $versionDir');
@@ -869,12 +1206,13 @@ class VersionManager extends ChangeNotifier {
     // Update PATH for current session (Windows)
     if (Platform.isWindows) {
       try {
-        await Process.run(
-          'setx',
-          ['LOCALX_${software.toUpperCase().replaceAll('.', '_')}', binPath],
-          runInShell: true,
+        await Process.run('setx', [
+          'LOCALX_${software.toUpperCase().replaceAll('.', '_')}',
+          binPath,
+        ], runInShell: true);
+        debugPrint(
+          '[VersionManager] Set LOCALX path env var for $software to $binPath',
         );
-        debugPrint('[VersionManager] Set LOCALX path env var for $software to $binPath');
       } catch (e) {
         debugPrint('[VersionManager] Failed to set env var: $e');
       }
@@ -902,7 +1240,10 @@ class VersionManager extends ChangeNotifier {
 
   /// Get list of locally installed versions for a software
   Future<List<String>> getLocalVersions(String software) async {
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
     final swDir = Directory('$_localxHome${Platform.pathSeparator}$swKey');
 
     if (!await swDir.exists()) return [];
@@ -918,7 +1259,9 @@ class VersionManager extends ChangeNotifier {
 
   Future<String> _resolveNodeVersion(String version) async {
     final major = version.split('.').first;
-    final url = Uri.parse('https://nodejs.org/dist/latest-v$major.x/SHASUMS256.txt');
+    final url = Uri.parse(
+      'https://nodejs.org/dist/latest-v$major.x/SHASUMS256.txt',
+    );
     try {
       final client = HttpClient();
       final request = await client.getUrl(url);
@@ -933,7 +1276,9 @@ class VersionManager extends ChangeNotifier {
         return match.group(1)!;
       }
     } catch (e) {
-      debugPrint('[VersionManager] Failed to resolve Node.js version for $version: $e');
+      debugPrint(
+        '[VersionManager] Failed to resolve Node.js version for $version: $e',
+      );
     }
     return version.replaceAll('.x', '.0');
   }
@@ -942,8 +1287,13 @@ class VersionManager extends ChangeNotifier {
     if (_localxHome.isEmpty) {
       await _initHome();
     }
-    final swKey = software.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
-    final bundlesDir = Directory('$_localxHome${Platform.pathSeparator}bundles${Platform.pathSeparator}$swKey');
+    final swKey = software
+        .toLowerCase()
+        .replaceAll('.', '')
+        .replaceAll(' ', '');
+    final bundlesDir = Directory(
+      '$_localxHome${Platform.pathSeparator}bundles${Platform.pathSeparator}$swKey',
+    );
     if (await bundlesDir.exists()) {
       for (final candidate in _bundleCandidates(version, version)) {
         final path = '${bundlesDir.path}${Platform.pathSeparator}$candidate';
@@ -960,4 +1310,23 @@ class VersionManager extends ChangeNotifier {
     _installProgress.remove('$software-$version');
     notifyListeners();
   }
+
+  void cancelInstall(String software, String version) {
+    final key = '$software-$version';
+    _cancelledInstalls.add(key);
+    _activeDownloadClients.remove(key)?.close(force: true);
+
+    final progress = _installProgress[key];
+    if (progress != null &&
+        (progress.status == InstallStatus.downloading ||
+            progress.status == InstallStatus.extracting ||
+            progress.status == InstallStatus.configuring)) {
+      progress.status = InstallStatus.canceled;
+      progress.message = 'Installation canceled';
+      progress.error = '';
+      notifyListeners();
+    }
+  }
 }
+
+class _InstallCancelledException implements Exception {}

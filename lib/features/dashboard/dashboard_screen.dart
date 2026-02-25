@@ -20,17 +20,24 @@ class DashboardScreen extends StatelessWidget {
     final vm = context.watch<VersionManager>();
     final settings = context.watch<SettingsService>();
     final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final subtitleColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final subtitleColor = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
     final accentColor = isDark ? AppColors.accent : AppColors.accentIndigo;
 
-    bool isInstalled(String software) => vm.installed[software]?.isInstalled == true;
+    bool isInstalled(String software) =>
+        vm.installed[software]?.isInstalled == true;
     bool isInstalling(String software) {
       final versions = SoftwareVersions.availableVersions[software] ?? [];
       if (versions.isEmpty) return false;
       final key = '$software-${versions.first}';
       final progress = vm.installProgress[key];
-      return progress != null && progress.status != InstallStatus.done && progress.status != InstallStatus.error;
+      return progress != null &&
+          progress.status != InstallStatus.done &&
+          progress.status != InstallStatus.error &&
+          progress.status != InstallStatus.canceled;
     }
+
     void install(String software) {
       final versions = SoftwareVersions.availableVersions[software] ?? [];
       if (versions.isEmpty) return;
@@ -81,9 +88,15 @@ class DashboardScreen extends StatelessWidget {
               const Spacer(),
               // Quick actions
               _QuickActionButton(
-                label: processManager.anyRunning ? context.tr('stop_all') : context.tr('start_all'),
-                icon: processManager.anyRunning ? Icons.stop_circle_outlined : Icons.play_circle_outlined,
-                color: processManager.anyRunning ? AppColors.stopped : AppColors.running,
+                label: processManager.anyRunning
+                    ? context.tr('stop_all')
+                    : context.tr('start_all'),
+                icon: processManager.anyRunning
+                    ? Icons.stop_circle_outlined
+                    : Icons.play_circle_outlined,
+                color: processManager.anyRunning
+                    ? AppColors.stopped
+                    : AppColors.running,
                 onTap: () {
                   if (processManager.anyRunning) {
                     processManager.stopAll();
@@ -106,7 +119,8 @@ class DashboardScreen extends StatelessWidget {
             children: [
               _StatCard(
                 title: 'Services Running',
-                value: '${processManager.runningCount}/${processManager.services.length}',
+                value:
+                    '${processManager.runningCount}/${processManager.services.length}',
                 icon: Icons.dns_outlined,
                 color: AppColors.running,
                 isDark: isDark,
@@ -124,7 +138,9 @@ class DashboardScreen extends StatelessWidget {
                 title: 'Status',
                 value: processManager.anyRunning ? 'Active' : 'Idle',
                 icon: Icons.monitor_heart_outlined,
-                color: processManager.anyRunning ? AppColors.warning : AppColors.info,
+                color: processManager.anyRunning
+                    ? AppColors.warning
+                    : AppColors.info,
                 isDark: isDark,
               ),
             ],
@@ -146,7 +162,11 @@ class DashboardScreen extends StatelessWidget {
           // Service cards grid
           LayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth > 900 ? 3 : constraints.maxWidth > 600 ? 2 : 1;
+              final crossAxisCount = constraints.maxWidth > 900
+                  ? 3
+                  : constraints.maxWidth > 600
+                  ? 2
+                  : 1;
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -160,7 +180,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'HTTP Server',
                     brand: BrandCatalog.service('apache'),
                     brandColor: AppColors.apache,
-                    status: processManager.getService('apache')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('apache')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('apache')?.version,
                     onToggle: () => _toggleService(processManager, 'apache'),
                     enabled: isInstalled('Apache'),
@@ -173,7 +195,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Database Server',
                     brand: BrandCatalog.service('mysql'),
                     brandColor: AppColors.mysql,
-                    status: processManager.getService('mysql')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('mysql')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('mysql')?.version,
                     onToggle: () => _toggleService(processManager, 'mysql'),
                     enabled: isInstalled('MySQL'),
@@ -186,7 +210,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Runtime',
                     brand: BrandCatalog.service('php'),
                     brandColor: AppColors.php,
-                    status: processManager.getService('php')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('php')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('php')?.version,
                     onToggle: () => _toggleService(processManager, 'php'),
                     enabled: isInstalled('PHP'),
@@ -199,7 +225,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Runtime',
                     brand: BrandCatalog.service('python'),
                     brandColor: AppColors.python,
-                    status: processManager.getService('python')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('python')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('python')?.version,
                     onToggle: () => _toggleService(processManager, 'python'),
                     enabled: isInstalled('Python'),
@@ -212,7 +240,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Cache Server',
                     brand: BrandCatalog.service('redis'),
                     brandColor: AppColors.redis,
-                    status: processManager.getService('redis')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('redis')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('redis')?.version,
                     onToggle: () => _toggleService(processManager, 'redis'),
                     enabled: isInstalled('Redis'),
@@ -225,7 +255,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'JS Runtime',
                     brand: BrandCatalog.service('nodejs'),
                     brandColor: AppColors.nodejs,
-                    status: processManager.getService('nodejs')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('nodejs')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('nodejs')?.version,
                     onToggle: () => _toggleService(processManager, 'nodejs'),
                     enabled: isInstalled('Node.js'),
@@ -238,7 +270,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Database Server',
                     brand: BrandCatalog.service('postgres'),
                     brandColor: const Color(0xFF336791), // Postgres Blue
-                    status: processManager.getService('postgres')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('postgres')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('postgres')?.version,
                     onToggle: () => _toggleService(processManager, 'postgres'),
                     enabled: isInstalled('PostgreSQL'),
@@ -251,7 +285,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Cache Server',
                     brand: BrandCatalog.service('memcached'),
                     brandColor: const Color(0xFF51B24B), // Memcached Green
-                    status: processManager.getService('memcached')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('memcached')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('memcached')?.version,
                     onToggle: () => _toggleService(processManager, 'memcached'),
                     enabled: isInstalled('Memcached'),
@@ -264,7 +300,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Local SMTP',
                     brand: BrandCatalog.service('mailhog'),
                     brandColor: const Color(0xFFE83D31), // Mailhog Red
-                    status: processManager.getService('mailhog')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('mailhog')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('mailhog')?.version,
                     onToggle: () => _toggleService(processManager, 'mailhog'),
                     enabled: isInstalled('Mailhog'),
@@ -277,7 +315,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'Mailpit Server',
                     brand: BrandCatalog.service('smtp'),
                     brandColor: AppColors.smtp,
-                    status: processManager.getService('smtp')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('smtp')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('smtp')?.version,
                     onToggle: () => _toggleService(processManager, 'smtp'),
                     enabled: isInstalled('SMTP'),
@@ -290,7 +330,9 @@ class DashboardScreen extends StatelessWidget {
                     subtitle: 'WebSocket Server',
                     brand: BrandCatalog.service('websocket'),
                     brandColor: AppColors.websocket,
-                    status: processManager.getService('websocket')?.status ?? ServiceStatus.stopped,
+                    status:
+                        processManager.getService('websocket')?.status ??
+                        ServiceStatus.stopped,
                     version: processManager.getService('websocket')?.version,
                     onToggle: () => _toggleService(processManager, 'websocket'),
                     enabled: isInstalled('WebSocket'),
@@ -339,7 +381,9 @@ class DashboardScreen extends StatelessWidget {
                 color: AppColors.info,
                 isDark: isDark,
                 onTap: () {
-                  launchUrl(Uri.parse('http://127.0.0.1:${settings.apachePort}'));
+                  launchUrl(
+                    Uri.parse('http://127.0.0.1:${settings.apachePort}'),
+                  );
                 },
               ),
               const SizedBox(width: 16),
@@ -390,7 +434,9 @@ class _StatCard extends StatelessWidget {
     final cardBg = isDark ? AppColors.darkCard : AppColors.lightCard;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
     final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final subtitleColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final subtitleColor = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
 
     return Expanded(
       child: Container(
@@ -415,10 +461,18 @@ class _StatCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: textColor,
-                )),
-                Text(title, style: TextStyle(fontSize: 12, color: subtitleColor)),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 12, color: subtitleColor),
+                ),
               ],
             ),
           ],
@@ -460,7 +514,9 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
-            color: _isHovered ? widget.color.withValues(alpha: 0.15) : widget.color.withValues(alpha: 0.08),
+            color: _isHovered
+                ? widget.color.withValues(alpha: 0.15)
+                : widget.color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: widget.color.withValues(alpha: 0.3)),
           ),
@@ -469,9 +525,14 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
             children: [
               Icon(widget.icon, color: widget.color, size: 20),
               const SizedBox(width: 8),
-              Text(widget.label, style: TextStyle(
-                color: widget.color, fontSize: 14, fontWeight: FontWeight.w600,
-              )),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: widget.color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -508,9 +569,13 @@ class _QuickLinkCardState extends State<_QuickLinkCard> {
   @override
   Widget build(BuildContext context) {
     final cardBg = widget.isDark ? AppColors.darkCard : AppColors.lightCard;
-    final borderColor = widget.isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final borderColor = widget.isDark
+        ? AppColors.darkBorder
+        : AppColors.lightBorder;
     final textColor = widget.isDark ? AppColors.darkText : AppColors.lightText;
-    final subtitleColor = widget.isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final subtitleColor = widget.isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
 
     return Expanded(
       child: MouseRegion(
@@ -525,7 +590,9 @@ class _QuickLinkCardState extends State<_QuickLinkCard> {
               color: cardBg,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _isHovered ? widget.color.withValues(alpha: 0.5) : borderColor,
+                color: _isHovered
+                    ? widget.color.withValues(alpha: 0.5)
+                    : borderColor,
               ),
             ),
             child: Row(
@@ -543,10 +610,18 @@ class _QuickLinkCardState extends State<_QuickLinkCard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.title, style: TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: textColor,
-                    )),
-                    Text(widget.subtitle, style: TextStyle(fontSize: 12, color: subtitleColor)),
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
+                    Text(
+                      widget.subtitle,
+                      style: TextStyle(fontSize: 12, color: subtitleColor),
+                    ),
                   ],
                 ),
                 const Spacer(),

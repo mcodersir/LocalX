@@ -1,8 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'service_runtime.dart';
+import 'port_probe.dart';
 
 enum ServiceStatus { stopped, starting, running, stopping, error }
 
@@ -42,8 +43,8 @@ class ServiceInfo {
     this.healthUrl,
     this.lastExitCode,
     this.isDockerFallback = false,
-  })  : port = port ?? defaultPort,
-        logs = logs ?? [];
+  }) : port = port ?? defaultPort,
+       logs = logs ?? [];
 }
 
 class ProcessManager extends ChangeNotifier {
@@ -59,17 +60,61 @@ class ProcessManager extends ChangeNotifier {
   }
 
   void _initServices() {
-    _services['apache'] = ServiceInfo(name: 'Apache', icon: 'http', defaultPort: 80);
-    _services['mysql'] = ServiceInfo(name: 'MySQL', icon: 'storage', defaultPort: 3306);
-    _services['php'] = ServiceInfo(name: 'PHP', icon: 'code', defaultPort: 9000);
-    _services['redis'] = ServiceInfo(name: 'Redis', icon: 'memory', defaultPort: 6379);
-    _services['nodejs'] = ServiceInfo(name: 'Node.js', icon: 'javascript', defaultPort: 3000);
-    _services['postgres'] = ServiceInfo(name: 'PostgreSQL', icon: 'dns', defaultPort: 5432);
-    _services['memcached'] = ServiceInfo(name: 'Memcached', icon: 'sd_storage', defaultPort: 11211);
-    _services['mailhog'] = ServiceInfo(name: 'Mailhog', icon: 'mail', defaultPort: 8025);
-    _services['smtp'] = ServiceInfo(name: 'SMTP', icon: 'mail', defaultPort: 1026);
-    _services['websocket'] = ServiceInfo(name: 'WebSocket', icon: 'cable', defaultPort: 6001);
-    _services['python'] = ServiceInfo(name: 'Python', icon: 'code', defaultPort: 8000);
+    _services['apache'] = ServiceInfo(
+      name: 'Apache',
+      icon: 'http',
+      defaultPort: 80,
+    );
+    _services['mysql'] = ServiceInfo(
+      name: 'MySQL',
+      icon: 'storage',
+      defaultPort: 3306,
+    );
+    _services['php'] = ServiceInfo(
+      name: 'PHP',
+      icon: 'code',
+      defaultPort: 9000,
+    );
+    _services['redis'] = ServiceInfo(
+      name: 'Redis',
+      icon: 'memory',
+      defaultPort: 6379,
+    );
+    _services['nodejs'] = ServiceInfo(
+      name: 'Node.js',
+      icon: 'javascript',
+      defaultPort: 3000,
+    );
+    _services['postgres'] = ServiceInfo(
+      name: 'PostgreSQL',
+      icon: 'dns',
+      defaultPort: 5432,
+    );
+    _services['memcached'] = ServiceInfo(
+      name: 'Memcached',
+      icon: 'sd_storage',
+      defaultPort: 11211,
+    );
+    _services['mailhog'] = ServiceInfo(
+      name: 'Mailhog',
+      icon: 'mail',
+      defaultPort: 8025,
+    );
+    _services['smtp'] = ServiceInfo(
+      name: 'SMTP',
+      icon: 'mail',
+      defaultPort: 1026,
+    );
+    _services['websocket'] = ServiceInfo(
+      name: 'WebSocket',
+      icon: 'cable',
+      defaultPort: 6001,
+    );
+    _services['python'] = ServiceInfo(
+      name: 'Python',
+      icon: 'code',
+      defaultPort: 8000,
+    );
 
     _detectVersions();
   }
@@ -78,22 +123,38 @@ class ProcessManager extends ChangeNotifier {
 
   ServiceInfo? getService(String key) => _services[key];
 
-  bool get allRunning => _services.values.every((s) => s.status == ServiceStatus.running);
-  bool get anyRunning => _services.values.any((s) => s.status == ServiceStatus.running);
-  int get runningCount => _services.values.where((s) => s.status == ServiceStatus.running).length;
+  bool get allRunning =>
+      _services.values.every((s) => s.status == ServiceStatus.running);
+  bool get anyRunning =>
+      _services.values.any((s) => s.status == ServiceStatus.running);
+  int get runningCount =>
+      _services.values.where((s) => s.status == ServiceStatus.running).length;
 
   Future<void> startService(String key) async {
     final service = _services[key];
-    if (service == null || service.status == ServiceStatus.running || service.status == ServiceStatus.starting) {
+    if (service == null ||
+        service.status == ServiceStatus.running ||
+        service.status == ServiceStatus.starting) {
       return;
     }
 
+    final requestedPort = service.port;
+    final resolvedPort = await _resolveServicePort(key, requestedPort, service);
+    service.port = resolvedPort;
     service.status = ServiceStatus.starting;
     service.errorMessage = '';
-    service.logs.add('[${DateTime.now()}] Starting ${service.name} on port ${service.port}...');
+    if (requestedPort != resolvedPort) {
+      service.logs.add(
+        '[${DateTime.now()}] Port $requestedPort was unavailable. '
+        'Switched ${service.name} to port $resolvedPort to avoid conflicts (XAMPP/WAMP/IIS).',
+      );
+    }
+    service.logs.add(
+      '[${DateTime.now()}] Starting ${service.name} on port $resolvedPort...',
+    );
     notifyListeners();
 
-    final plan = ServiceRuntimeResolver.resolve(key, service.port);
+    final plan = ServiceRuntimeResolver.resolve(key, resolvedPort);
     final nativeRuntime = NativeServiceRuntime(
       spec: plan.native,
       workingDirectory: Directory.systemTemp.path,
@@ -101,24 +162,37 @@ class ProcessManager extends ChangeNotifier {
 
     final nativeResult = await nativeRuntime.start();
     if (nativeResult.success && nativeResult.process != null) {
-      final stillAlive = await _nativeStillAlive(nativeResult.process!);
-      if (stillAlive) {
-        _bindNativeProcess(service, key, nativeResult);
+      _attachProcessLogs(service, nativeResult.process!);
+      final started = await _waitForNativeStartup(
+        nativeResult.process!,
+        nativeResult.healthUrl,
+      );
+      if (started) {
+        _bindNativeProcess(service, key, nativeResult, resolvedPort);
         return;
       }
 
-      service.logs.add('[${DateTime.now()}] Native process exited immediately. Trying Docker fallback...');
+      service.logs.add(
+        '[${DateTime.now()}] Native process exited immediately. Trying Docker fallback...',
+      );
+      if (!await _hasExited(nativeResult.process!)) {
+        nativeResult.process!.kill();
+      }
       try {
         service.lastExitCode = await nativeResult.process!.exitCode;
       } catch (_) {}
     } else {
-      service.logs.add('[${DateTime.now()}] Native start failed: ${nativeResult.error ?? 'unknown error'}');
+      service.logs.add(
+        '[${DateTime.now()}] Native start failed: ${nativeResult.error ?? 'unknown error'}',
+      );
     }
 
     final dockerSpec = plan.dockerFallback;
     if (dockerSpec == null) {
       service.status = ServiceStatus.error;
-      service.errorMessage = nativeResult.error ?? 'Native start failed and no Docker fallback exists.';
+      service.errorMessage =
+          nativeResult.error ??
+          'Native start failed and no Docker fallback exists.';
       notifyListeners();
       return;
     }
@@ -132,7 +206,9 @@ class ProcessManager extends ChangeNotifier {
     if (!dockerResult.success) {
       service.status = ServiceStatus.error;
       service.errorMessage = dockerResult.error ?? 'Docker fallback failed';
-      service.logs.add('[${DateTime.now()}] Docker fallback failed: ${service.errorMessage}');
+      service.logs.add(
+        '[${DateTime.now()}] Docker fallback failed: ${service.errorMessage}',
+      );
       notifyListeners();
       return;
     }
@@ -145,21 +221,107 @@ class ProcessManager extends ChangeNotifier {
     service.containerName = dockerResult.containerName;
     service.healthUrl = dockerResult.healthUrl;
     service.isDockerFallback = true;
-    service.logs.add('[${DateTime.now()}] ${service.name} started in Docker container ${service.containerName}.');
+    service.logs.add(
+      '[${DateTime.now()}] ${service.name} started in Docker container ${service.containerName} '
+      'on port $resolvedPort.',
+    );
     await _persistRunningServices();
     notifyListeners();
   }
 
-  Future<bool> _nativeStillAlive(Process process) async {
+  Future<int> _resolveServicePort(
+    String key,
+    int preferredPort,
+    ServiceInfo service,
+  ) async {
+    final free = await PortProbe.isAvailable(preferredPort);
+    if (free) return preferredPort;
+
+    final fallbackStart = preferredPort < 1024 ? 1024 : preferredPort + 1;
+    final fallback = await PortProbe.findAvailablePort(
+      fallbackStart,
+      maxAttempts: 120,
+    );
+    if (fallback == preferredPort) {
+      service.logs.add(
+        '[${DateTime.now()}] Port $preferredPort is unavailable and no alternative port was found quickly. '
+        'Service may fail to start.',
+      );
+      return preferredPort;
+    }
+    return fallback;
+  }
+
+  Future<bool> _waitForNativeStartup(Process process, Uri? healthUrl) async {
+    final startedAt = DateTime.now();
+    while (DateTime.now().difference(startedAt) < const Duration(seconds: 8)) {
+      final exited = await _hasExited(process);
+      if (exited) return false;
+
+      if (healthUrl == null) {
+        if (DateTime.now().difference(startedAt) >=
+            const Duration(seconds: 2)) {
+          return true;
+        }
+      } else {
+        final ok = await _checkHttpHealth(healthUrl);
+        if (ok) return true;
+      }
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+    return healthUrl == null;
+  }
+
+  Future<bool> _hasExited(Process process) async {
     try {
-      await process.exitCode.timeout(const Duration(milliseconds: 800));
-      return false;
-    } on TimeoutException {
+      await process.exitCode.timeout(const Duration(milliseconds: 20));
       return true;
+    } on TimeoutException {
+      return false;
     }
   }
 
-  void _bindNativeProcess(ServiceInfo service, String key, RuntimeStartResult result) {
+  Future<bool> _checkHttpHealth(Uri uri) async {
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+      final request = await client.getUrl(uri);
+      request.followRedirects = false;
+      final response = await request.close().timeout(
+        const Duration(seconds: 1),
+      );
+      return response.statusCode >= 200 && response.statusCode < 500;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  void _attachProcessLogs(ServiceInfo service, Process process) {
+    process.stdout.transform(SystemEncoding().decoder).listen((data) {
+      final line = data.trim();
+      if (line.isNotEmpty) {
+        service.logs.add(line);
+        notifyListeners();
+      }
+    });
+
+    process.stderr.transform(SystemEncoding().decoder).listen((data) {
+      final line = data.trim();
+      if (line.isNotEmpty) {
+        service.logs.add(line);
+        notifyListeners();
+      }
+    });
+  }
+
+  void _bindNativeProcess(
+    ServiceInfo service,
+    String key,
+    RuntimeStartResult result,
+    int port,
+  ) {
     service.status = ServiceStatus.running;
     service.runtimeMode = RuntimeMode.native;
     service.process = result.process;
@@ -168,22 +330,6 @@ class ProcessManager extends ChangeNotifier {
     service.containerName = null;
     service.healthUrl = result.healthUrl;
     service.isDockerFallback = false;
-
-    result.process!.stdout.transform(SystemEncoding().decoder).listen((data) {
-      final line = data.trim();
-      if (line.isNotEmpty) {
-        service.logs.add(line);
-        notifyListeners();
-      }
-    });
-
-    result.process!.stderr.transform(SystemEncoding().decoder).listen((data) {
-      final line = data.trim();
-      if (line.isNotEmpty) {
-        service.logs.add(line);
-        notifyListeners();
-      }
-    });
 
     result.process!.exitCode.then((code) async {
       service.lastExitCode = code;
@@ -196,7 +342,9 @@ class ProcessManager extends ChangeNotifier {
       notifyListeners();
     });
 
-    service.logs.add('[${DateTime.now()}] ${service.name} is running (native, pid=${service.pid}).');
+    service.logs.add(
+      '[${DateTime.now()}] ${service.name} is running (native, pid=${service.pid}, port=$port).',
+    );
     _persistRunningServices();
     notifyListeners();
   }
@@ -209,8 +357,13 @@ class ProcessManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (service.runtimeMode == RuntimeMode.docker && service.containerName != null) {
-        await Process.run('docker', ['rm', '-f', service.containerName!], runInShell: true);
+      if (service.runtimeMode == RuntimeMode.docker &&
+          service.containerName != null) {
+        await Process.run('docker', [
+          'rm',
+          '-f',
+          service.containerName!,
+        ], runInShell: true);
       } else {
         service.process?.kill();
       }
@@ -295,7 +448,9 @@ class ProcessManager extends ChangeNotifier {
     try {
       final result = await Process.run('php', ['--version']);
       if (result.exitCode == 0) {
-        final version = RegExp(r'PHP (\d+\.\d+\.\d+)').firstMatch(result.stdout.toString());
+        final version = RegExp(
+          r'PHP (\d+\.\d+\.\d+)',
+        ).firstMatch(result.stdout.toString());
         _services['php']?.version = version?.group(1) ?? 'Unknown';
       }
     } catch (_) {
@@ -326,7 +481,9 @@ class ProcessManager extends ChangeNotifier {
     try {
       final result = await Process.run('mysql', ['--version']);
       if (result.exitCode == 0) {
-        final version = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(result.stdout.toString());
+        final version = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(result.stdout.toString());
         _services['mysql']?.version = version?.group(1) ?? 'Unknown';
       }
     } catch (_) {
@@ -336,7 +493,9 @@ class ProcessManager extends ChangeNotifier {
     try {
       final result = await Process.run('MailHog', ['-version']);
       if (result.exitCode == 0) {
-        final version = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(result.stdout.toString());
+        final version = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(result.stdout.toString());
         _services['mailhog']?.version = version?.group(1) ?? 'Unknown';
       }
     } catch (_) {
@@ -346,7 +505,9 @@ class ProcessManager extends ChangeNotifier {
     try {
       final result = await Process.run('mailpit', ['--version']);
       if (result.exitCode == 0) {
-        final version = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(result.stdout.toString());
+        final version = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(result.stdout.toString());
         _services['smtp']?.version = version?.group(1) ?? 'Unknown';
       }
     } catch (_) {
@@ -356,7 +517,9 @@ class ProcessManager extends ChangeNotifier {
     try {
       final result = await Process.run('websocat', ['--version']);
       if (result.exitCode == 0) {
-        final version = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(result.stdout.toString());
+        final version = RegExp(
+          r'(\d+\.\d+\.\d+)',
+        ).firstMatch(result.stdout.toString());
         _services['websocket']?.version = version?.group(1) ?? 'Unknown';
       }
     } catch (_) {
@@ -376,20 +539,27 @@ class ProcessManager extends ChangeNotifier {
   Future<void> _refreshDockerStatuses() async {
     for (final entry in _services.entries) {
       final service = entry.value;
-      if (service.status != ServiceStatus.running || service.runtimeMode != RuntimeMode.docker || service.containerName == null) {
+      if (service.status != ServiceStatus.running ||
+          service.runtimeMode != RuntimeMode.docker ||
+          service.containerName == null) {
         continue;
       }
 
-      final check = await Process.run(
-        'docker',
-        ['ps', '--filter', 'name=${service.containerName}', '--format', '{{.Names}}'],
-        runInShell: true,
-      );
+      final check = await Process.run('docker', [
+        'ps',
+        '--filter',
+        'name=${service.containerName}',
+        '--format',
+        '{{.Names}}',
+      ], runInShell: true);
 
-      final running = check.exitCode == 0 && check.stdout.toString().trim().isNotEmpty;
+      final running =
+          check.exitCode == 0 && check.stdout.toString().trim().isNotEmpty;
       if (!running) {
         service.status = ServiceStatus.stopped;
-        service.logs.add('[${DateTime.now()}] Docker container ${service.containerName} is not running.');
+        service.logs.add(
+          '[${DateTime.now()}] Docker container ${service.containerName} is not running.',
+        );
         service.containerName = null;
         service.runtimeMode = null;
         service.isDockerFallback = false;

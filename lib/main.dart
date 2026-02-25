@@ -103,9 +103,13 @@ class LocalXApp extends StatelessWidget {
     final settings = context.watch<SettingsService>();
     final locale = Locale(settings.language);
     final isFa = settings.language == 'fa';
-    final lightTheme = isFa ? AppTheme.lightThemeWithFonts(displayFont: 'Vazir', bodyFont: 'Vazir') : AppTheme.lightTheme;
-    final darkTheme = isFa ? AppTheme.darkThemeWithFonts(displayFont: 'Vazir', bodyFont: 'Vazir') : AppTheme.darkTheme;
-    
+    final lightTheme = isFa
+        ? AppTheme.lightThemeWithFonts(displayFont: 'Vazir', bodyFont: 'Vazir')
+        : AppTheme.lightTheme;
+    final darkTheme = isFa
+        ? AppTheme.darkThemeWithFonts(displayFont: 'Vazir', bodyFont: 'Vazir')
+        : AppTheme.darkTheme;
+
     return MaterialApp(
       title: context.tr('app_name'),
       debugShowCheckedModeBanner: false,
@@ -121,7 +125,9 @@ class LocalXApp extends StatelessWidget {
       ],
       builder: (context, child) {
         return Directionality(
-          textDirection: settings.language == 'fa' ? TextDirection.rtl : TextDirection.ltr,
+          textDirection: settings.language == 'fa'
+              ? TextDirection.rtl
+              : TextDirection.ltr,
           child: child!,
         );
       },
@@ -191,11 +197,20 @@ class _AppShellState extends State<AppShell> with WindowListener, TrayListener {
   // Handle global shortcuts (Ctrl+K or Cmd+K)
   void _handleKeyPress(KeyEvent event) {
     if (event is KeyDownEvent) {
-      final isCmdOrCtrl = HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.metaLeft) || 
-                          HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.metaRight) ||
-                          HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
-                          HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.controlRight);
-      
+      final isCmdOrCtrl =
+          HardwareKeyboard.instance.isLogicalKeyPressed(
+            LogicalKeyboardKey.metaLeft,
+          ) ||
+          HardwareKeyboard.instance.isLogicalKeyPressed(
+            LogicalKeyboardKey.metaRight,
+          ) ||
+          HardwareKeyboard.instance.isLogicalKeyPressed(
+            LogicalKeyboardKey.controlLeft,
+          ) ||
+          HardwareKeyboard.instance.isLogicalKeyPressed(
+            LogicalKeyboardKey.controlRight,
+          );
+
       if (isCmdOrCtrl && event.logicalKey == LogicalKeyboardKey.keyK) {
         _showCommandPalette();
       }
@@ -245,22 +260,32 @@ class _AppShellState extends State<AppShell> with WindowListener, TrayListener {
       focusNode: FocusNode()..requestFocus(),
       onKeyEvent: _handleKeyPress,
       child: Scaffold(
-        backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+        backgroundColor: isDark
+            ? AppColors.darkBackground
+            : AppColors.lightBackground,
         body: Container(
           decoration: BoxDecoration(
-            gradient: isDark ? AppColors.shellGradientDark : AppColors.shellGradientLight,
+            gradient: isDark
+                ? AppColors.shellGradientDark
+                : AppColors.shellGradientLight,
           ),
           child: Stack(
             children: [
               Positioned(
                 right: -120,
                 top: -80,
-                child: _GlowBlob(color: AppColors.accent.withValues(alpha: 0.25), size: 320),
+                child: _GlowBlob(
+                  color: AppColors.accent.withValues(alpha: 0.25),
+                  size: 320,
+                ),
               ),
               Positioned(
                 left: -140,
                 bottom: -120,
-                child: _GlowBlob(color: AppColors.accentSecondary.withValues(alpha: 0.22), size: 360),
+                child: _GlowBlob(
+                  color: AppColors.accentSecondary.withValues(alpha: 0.22),
+                  size: 360,
+                ),
               ),
               Column(
                 children: [
@@ -274,7 +299,8 @@ class _AppShellState extends State<AppShell> with WindowListener, TrayListener {
                       children: [
                         SidebarNav(
                           selectedIndex: _selectedIndex,
-                          onItemSelected: (i) => setState(() => _selectedIndex = i),
+                          onItemSelected: (i) =>
+                              setState(() => _selectedIndex = i),
                         ),
                         Expanded(
                           child: IndexedStack(
@@ -321,11 +347,19 @@ class _AppShellState extends State<AppShell> with WindowListener, TrayListener {
   Future<void> _updateTrayMenu() async {
     if (!Platform.isWindows) return;
     final settings = context.read<SettingsService>();
-    final menu = Menu(items: [
-      MenuItem(key: 'open', label: AppTranslations.tr(settings.language, 'tray_open')),
-      MenuItem.separator(),
-      MenuItem(key: 'exit', label: AppTranslations.tr(settings.language, 'tray_exit')),
-    ]);
+    final menu = Menu(
+      items: [
+        MenuItem(
+          key: 'open',
+          label: AppTranslations.tr(settings.language, 'tray_open'),
+        ),
+        MenuItem.separator(),
+        MenuItem(
+          key: 'exit',
+          label: AppTranslations.tr(settings.language, 'tray_exit'),
+        ),
+      ],
+    );
     await trayManager.setContextMenu(menu);
   }
 
@@ -408,9 +442,7 @@ class _GlowBlob extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: color, blurRadius: 120, spreadRadius: 10),
-        ],
+        boxShadow: [BoxShadow(color: color, blurRadius: 120, spreadRadius: 10)],
       ),
     );
   }
@@ -436,7 +468,11 @@ class _AdminBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.admin_panel_settings_outlined, size: 18, color: AppColors.warning),
+          Icon(
+            Icons.admin_panel_settings_outlined,
+            size: 18,
+            color: AppColors.warning,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -458,7 +494,9 @@ class _TitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-    final subtitleColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final subtitleColor = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
 
     return GestureDetector(
       onPanStart: (_) => windowManager.startDragging(),
@@ -473,17 +511,44 @@ class _TitleBar extends StatelessWidget {
             const SizedBox(width: 16),
             ShaderMask(
               shaderCallback: (b) => AppColors.accentGradient.createShader(b),
-              child: Text('LocalX', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+              child: Text(
+                'LocalX',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
             ),
             const SizedBox(width: 8),
-            Text('v1.0.0', style: TextStyle(fontSize: 11, color: subtitleColor)),
+            Text(
+              'v1.4.0',
+              style: TextStyle(fontSize: 11, color: subtitleColor),
+            ),
             const Spacer(),
             // Window controls
-            _WinBtn(icon: Icons.remove, onTap: () => windowManager.minimize(), color: subtitleColor),
-            _WinBtn(icon: Icons.crop_square, onTap: () async {
-              if (await windowManager.isMaximized()) { windowManager.unmaximize(); } else { windowManager.maximize(); }
-            }, color: subtitleColor),
-            _WinBtn(icon: Icons.close, onTap: () => windowManager.close(), color: AppColors.stopped, isClose: true),
+            _WinBtn(
+              icon: Icons.remove,
+              onTap: () => windowManager.minimize(),
+              color: subtitleColor,
+            ),
+            _WinBtn(
+              icon: Icons.crop_square,
+              onTap: () async {
+                if (await windowManager.isMaximized()) {
+                  windowManager.unmaximize();
+                } else {
+                  windowManager.maximize();
+                }
+              },
+              color: subtitleColor,
+            ),
+            _WinBtn(
+              icon: Icons.close,
+              onTap: () => windowManager.close(),
+              color: AppColors.stopped,
+              isClose: true,
+            ),
             const SizedBox(width: 4),
           ],
         ),
@@ -497,7 +562,12 @@ class _WinBtn extends StatefulWidget {
   final VoidCallback onTap;
   final Color color;
   final bool isClose;
-  const _WinBtn({required this.icon, required this.onTap, required this.color, this.isClose = false});
+  const _WinBtn({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+    this.isClose = false,
+  });
   @override
   State<_WinBtn> createState() => _WinBtnState();
 }
@@ -512,13 +582,22 @@ class _WinBtnState extends State<_WinBtn> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
-          width: 36, height: 28,
+          width: 36,
+          height: 28,
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: _hovered ? (widget.isClose ? AppColors.stopped : widget.color.withValues(alpha: 0.1)) : Colors.transparent,
+            color: _hovered
+                ? (widget.isClose
+                      ? AppColors.stopped
+                      : widget.color.withValues(alpha: 0.1))
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(widget.icon, size: 15, color: _hovered && widget.isClose ? Colors.white : widget.color),
+          child: Icon(
+            widget.icon,
+            size: 15,
+            color: _hovered && widget.isClose ? Colors.white : widget.color,
+          ),
         ),
       ),
     );
@@ -531,7 +610,8 @@ class _SplashView extends StatefulWidget {
   State<_SplashView> createState() => _SplashViewState();
 }
 
-class _SplashViewState extends State<_SplashView> with SingleTickerProviderStateMixin {
+class _SplashViewState extends State<_SplashView>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
@@ -539,14 +619,26 @@ class _SplashViewState extends State<_SplashView> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _scaleAnim = Tween<double>(begin: 0.8, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _fadeAnim = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(
+      begin: 0.8,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -562,24 +654,66 @@ class _SplashViewState extends State<_SplashView> with SingleTickerProviderState
                 opacity: _fadeAnim.value,
                 child: Transform.scale(
                   scale: _scaleAnim.value,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(color: AppColors.brandDark, borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: AppColors.brandDark.withValues(alpha: 0.4), blurRadius: 30, spreadRadius: 5)]),
-                      child: const Center(child: Text('LX', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1))),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text('LocalX', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.5)),
-                    const SizedBox(height: 8),
-                    const Text('Modern Development Environment', style: TextStyle(fontSize: 14, color: AppColors.darkTextSecondary)),
-                    const SizedBox(height: 32),
-                    SizedBox(width: 120, child: LinearProgressIndicator(
-                      backgroundColor: AppColors.darkBorder,
-                      valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-                      minHeight: 2,
-                    )),
-                  ]),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: AppColors.brandDark,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.brandDark.withValues(alpha: 0.4),
+                              blurRadius: 30,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'LX',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'LocalX',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Modern Development Environment',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.darkTextSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: 120,
+                        child: LinearProgressIndicator(
+                          backgroundColor: AppColors.darkBorder,
+                          valueColor: const AlwaysStoppedAnimation(
+                            AppColors.accent,
+                          ),
+                          minHeight: 2,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

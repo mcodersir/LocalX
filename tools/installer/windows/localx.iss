@@ -55,4 +55,4 @@ Name: "{group}\LocalX"; Filename: "{app}\localx.exe"
 Name: "{autodesktop}\LocalX"; Filename: "{app}\localx.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\localx.exe"; Description: "Launch LocalX"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\localx.exe"; Description: "Launch LocalX"; Flags: nowait postinstall skipifsilent runasoriginaluser

@@ -6,11 +6,13 @@ class NativeRuntimeSpec {
   final String command;
   final List<String> args;
   final Uri? healthUrl;
+  final String? workingDirectory;
 
   const NativeRuntimeSpec({
     required this.command,
     required this.args,
     this.healthUrl,
+    this.workingDirectory,
   });
 }
 
@@ -36,10 +38,7 @@ class ServiceRuntimePlan {
   final NativeRuntimeSpec native;
   final DockerRuntimeSpec? dockerFallback;
 
-  const ServiceRuntimePlan({
-    required this.native,
-    this.dockerFallback,
-  });
+  const ServiceRuntimePlan({required this.native, this.dockerFallback});
 }
 
 class RuntimeStartResult {
@@ -80,11 +79,16 @@ class NativeServiceRuntime implements ServiceRuntime {
   @override
   Future<RuntimeStartResult> start() async {
     try {
+      final resolvedCommand = await _resolveCommandPath(spec.command);
+      final effectiveWorkingDirectory =
+          spec.workingDirectory ??
+          _inferWorkingDirectory(resolvedCommand) ??
+          workingDirectory;
       final process = await Process.start(
-        spec.command,
+        resolvedCommand ?? spec.command,
         spec.args,
         runInShell: true,
-        workingDirectory: workingDirectory,
+        workingDirectory: effectiveWorkingDirectory,
       );
       return RuntimeStartResult(
         success: true,
@@ -92,7 +96,7 @@ class NativeServiceRuntime implements ServiceRuntime {
         process: process,
         pid: process.pid,
         healthUrl: spec.healthUrl,
-        binaryPath: spec.command,
+        binaryPath: resolvedCommand ?? spec.command,
       );
     } catch (e) {
       return RuntimeStartResult(
@@ -103,21 +107,66 @@ class NativeServiceRuntime implements ServiceRuntime {
       );
     }
   }
+
+  Future<String?> _resolveCommandPath(String command) async {
+    try {
+      if (command.contains(Platform.pathSeparator) || command.contains('/')) {
+        final file = File(command);
+        if (await file.exists()) return file.absolute.path;
+      }
+
+      final whichCommand = Platform.isWindows ? 'where' : 'which';
+      final result = await Process.run(whichCommand, [
+        command,
+      ], runInShell: true);
+      if (result.exitCode != 0) return null;
+      final lines = result.stdout.toString().split(RegExp(r'\r?\n'));
+      final first = lines
+          .map((e) => e.trim())
+          .firstWhere((e) => e.isNotEmpty, orElse: () => '');
+      return first.isEmpty ? null : first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _inferWorkingDirectory(String? resolvedCommand) {
+    if (resolvedCommand == null) return null;
+    try {
+      return File(resolvedCommand).parent.path;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class DockerServiceRuntime implements ServiceRuntime {
   final DockerRuntimeSpec spec;
   final String containerName;
 
-  const DockerServiceRuntime({
-    required this.spec,
-    required this.containerName,
-  });
+  const DockerServiceRuntime({required this.spec, required this.containerName});
 
   @override
   Future<RuntimeStartResult> start() async {
     try {
-      await Process.run('docker', ['rm', '-f', containerName], runInShell: true);
+      final dockerCheck = await Process.run('docker', [
+        'info',
+      ], runInShell: true);
+      if (dockerCheck.exitCode != 0) {
+        return RuntimeStartResult(
+          success: false,
+          mode: RuntimeMode.docker,
+          error:
+              'Docker daemon is unavailable. Start Docker Desktop (or Docker Engine) and retry.',
+          binaryPath: 'docker',
+        );
+      }
+
+      await Process.run('docker', [
+        'rm',
+        '-f',
+        containerName,
+      ], runInShell: true);
 
       final args = <String>[
         'run',
@@ -135,10 +184,16 @@ class DockerServiceRuntime implements ServiceRuntime {
 
       final run = await Process.run('docker', args, runInShell: true);
       if (run.exitCode != 0) {
+        final stderr = run.stderr.toString().trim();
+        final friendly =
+            stderr.contains('dockerDesktopLinuxEngine') ||
+                stderr.contains('cannot find the file')
+            ? 'Docker engine pipe is not available. Start Docker Desktop first.'
+            : stderr;
         return RuntimeStartResult(
           success: false,
           mode: RuntimeMode.docker,
-          error: run.stderr.toString().trim(),
+          error: friendly,
           binaryPath: 'docker',
         );
       }
@@ -168,7 +223,9 @@ class ServiceRuntimeResolver {
         return ServiceRuntimePlan(
           native: NativeRuntimeSpec(
             command: Platform.isWindows ? 'httpd.exe' : 'httpd',
-            args: Platform.isWindows ? ['-DFOREGROUND', '-X'] : ['-DFOREGROUND'],
+            args: Platform.isWindows
+                ? ['-DFOREGROUND', '-X']
+                : ['-DFOREGROUND'],
             healthUrl: Uri.parse('http://127.0.0.1:$port'),
           ),
           dockerFallback: DockerRuntimeSpec(
@@ -217,7 +274,14 @@ class ServiceRuntimeResolver {
             image: 'python:3.13-alpine',
             hostPort: port,
             containerPort: port,
-            command: ['python', '-m', 'http.server', '$port', '--bind', '0.0.0.0'],
+            command: [
+              'python',
+              '-m',
+              'http.server',
+              '$port',
+              '--bind',
+              '0.0.0.0',
+            ],
             healthUrl: Uri.parse('http://127.0.0.1:$port'),
           ),
         );
@@ -316,7 +380,10 @@ class ServiceRuntimeResolver {
         );
       default:
         return ServiceRuntimePlan(
-          native: const NativeRuntimeSpec(command: 'cmd', args: ['/c', 'echo unsupported']),
+          native: const NativeRuntimeSpec(
+            command: 'cmd',
+            args: ['/c', 'echo unsupported'],
+          ),
         );
     }
   }
