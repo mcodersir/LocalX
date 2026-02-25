@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'service_runtime.dart';
 import 'port_probe.dart';
+import 'log_service.dart';
 
 enum ServiceStatus { stopped, starting, running, stopping, error }
 
@@ -148,9 +149,17 @@ class ProcessManager extends ChangeNotifier {
         '[${DateTime.now()}] Port $requestedPort was unavailable. '
         'Switched ${service.name} to port $resolvedPort to avoid conflicts (XAMPP/WAMP/IIS).',
       );
+      LogService.instance.warning(
+        'service',
+        'port conflict key=$key requested=$requestedPort switched=$resolvedPort',
+      );
     }
     service.logs.add(
       '[${DateTime.now()}] Starting ${service.name} on port $resolvedPort...',
+    );
+    LogService.instance.info(
+      'service',
+      'start requested key=$key name=${service.name} port=$resolvedPort',
     );
     notifyListeners();
 
@@ -185,6 +194,10 @@ class ProcessManager extends ChangeNotifier {
       service.logs.add(
         '[${DateTime.now()}] Native start failed: ${nativeResult.error ?? 'unknown error'}',
       );
+      LogService.instance.warning(
+        'service',
+        'native start failed key=$key error=${nativeResult.error ?? 'unknown error'}',
+      );
     }
 
     final dockerSpec = plan.dockerFallback;
@@ -193,6 +206,10 @@ class ProcessManager extends ChangeNotifier {
       service.errorMessage =
           nativeResult.error ??
           'Native start failed and no Docker fallback exists.';
+      LogService.instance.error(
+        'service',
+        'start failed key=$key reason=${service.errorMessage}',
+      );
       notifyListeners();
       return;
     }
@@ -209,6 +226,10 @@ class ProcessManager extends ChangeNotifier {
       service.logs.add(
         '[${DateTime.now()}] Docker fallback failed: ${service.errorMessage}',
       );
+      LogService.instance.error(
+        'service',
+        'docker fallback failed key=$key error=${service.errorMessage}',
+      );
       notifyListeners();
       return;
     }
@@ -224,6 +245,10 @@ class ProcessManager extends ChangeNotifier {
     service.logs.add(
       '[${DateTime.now()}] ${service.name} started in Docker container ${service.containerName} '
       'on port $resolvedPort.',
+    );
+    LogService.instance.info(
+      'service',
+      'started key=$key mode=docker port=$resolvedPort container=${service.containerName}',
     );
     await _persistRunningServices();
     notifyListeners();
@@ -338,12 +363,20 @@ class ProcessManager extends ChangeNotifier {
       service.runtimeMode = null;
       service.status = ServiceStatus.stopped;
       service.logs.add('[${DateTime.now()}] $key exited with code $code');
+      LogService.instance.warning(
+        'service',
+        'process exited key=$key code=$code',
+      );
       await _persistRunningServices();
       notifyListeners();
     });
 
     service.logs.add(
       '[${DateTime.now()}] ${service.name} is running (native, pid=${service.pid}, port=$port).',
+    );
+    LogService.instance.info(
+      'service',
+      'started key=$key mode=native pid=${service.pid} port=$port binary=${service.binaryPath}',
     );
     _persistRunningServices();
     notifyListeners();
@@ -375,12 +408,14 @@ class ProcessManager extends ChangeNotifier {
       service.isDockerFallback = false;
       service.status = ServiceStatus.stopped;
       service.logs.add('[${DateTime.now()}] $key stopped');
+      LogService.instance.info('service', 'stopped key=$key');
       await _persistRunningServices();
       notifyListeners();
     } catch (e) {
       service.status = ServiceStatus.error;
       service.errorMessage = e.toString();
       service.logs.add('[${DateTime.now()}] Stop failed: $e');
+      LogService.instance.error('service', 'stop failed key=$key', error: e);
       notifyListeners();
     }
   }

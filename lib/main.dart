@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +19,7 @@ import 'core/services/settings_service.dart';
 import 'core/services/domain_service.dart';
 import 'core/services/adminer_service.dart';
 import 'core/services/system_service.dart';
+import 'core/services/log_service.dart';
 import 'shared/sidebar_nav.dart';
 import 'shared/command_palette.dart';
 import 'features/dashboard/dashboard_screen.dart';
@@ -30,6 +32,23 @@ import 'features/setup/setup_wizard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LogService.instance.initialize();
+  FlutterError.onError = (details) {
+    LogService.instance.error(
+      'flutter',
+      details.exceptionAsString(),
+      stackTrace: details.stack,
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    LogService.instance.error(
+      'platform',
+      'Unhandled platform error',
+      error: error,
+      stackTrace: stack,
+    );
+    return true;
+  };
   await windowManager.ensureInitialized();
   if (Platform.isWindows) {
     await windowManager.setPreventClose(true);
@@ -52,6 +71,7 @@ void main() async {
   final settings = SettingsService();
   await settings.loadSettings();
   await settings.ensureSafeDefaults();
+  await LogService.instance.info('app', 'LocalX starting, version=1.4.0');
 
   // Check if this is the first run
   final prefs = await SharedPreferences.getInstance();

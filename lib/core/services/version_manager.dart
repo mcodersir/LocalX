@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
+import 'log_service.dart';
 
 class VersionInfo {
   final String software;
@@ -782,6 +783,10 @@ class VersionManager extends ChangeNotifier {
   ) async {
     final url = SoftwareVersions.getDownloadUrl(software, effectiveVersion);
     if (url.isEmpty) {
+      LogService.instance.warning(
+        'version',
+        'no direct download url software=$software version=$effectiveVersion platform=${Platform.operatingSystem}',
+      );
       throw Exception(
         'No direct download is available for $software on this platform. '
         'Use ${SoftwareVersions.downloadPageUrls[software] ?? 'vendor website'}',
@@ -801,10 +806,18 @@ class VersionManager extends ChangeNotifier {
       if (response.statusCode == 200 ||
           response.statusCode == 206 ||
           (response.statusCode >= 300 && response.statusCode < 400)) {
+        LogService.instance.debug(
+          'version',
+          'download url validated software=$software version=$effectiveVersion url=$url status=${response.statusCode}',
+        );
         return url;
       }
       throw Exception('Link check failed with status ${response.statusCode}');
-    } catch (_) {
+    } catch (e) {
+      LogService.instance.warning(
+        'version',
+        'download url unreachable software=$software version=$effectiveVersion url=$url error=$e',
+      );
       throw Exception(
         'Download link for $software $effectiveVersion is unreachable right now. '
         'Use ${SoftwareVersions.downloadPageUrls[software] ?? 'official download page'} and retry.',
@@ -918,6 +931,10 @@ class VersionManager extends ChangeNotifier {
   Future<bool> installVersion(String software, String version) async {
     final key = '$software-$version';
     _cancelledInstalls.remove(key);
+    LogService.instance.info(
+      'version',
+      'install requested software=$software version=$version',
+    );
     _installProgress[key] = InstallProgress(
       software: software,
       version: version,
@@ -1063,6 +1080,10 @@ class VersionManager extends ChangeNotifier {
             '$software $effectiveVersion installed successfully!';
         _installProgress[key]!.progress = 1.0;
         notifyListeners();
+        LogService.instance.info(
+          'version',
+          'install completed software=$software version=$effectiveVersion path=$downloadPath mode=binary',
+        );
         return true;
       }
 
@@ -1117,6 +1138,10 @@ class VersionManager extends ChangeNotifier {
           '$software $effectiveVersion installed successfully!';
       _installProgress[key]!.progress = 1.0;
       notifyListeners();
+      LogService.instance.info(
+        'version',
+        'install completed software=$software version=$effectiveVersion path=$installDir mode=archive',
+      );
       _cancelledInstalls.remove(key);
       _activeDownloadClients.remove(key);
 
@@ -1126,6 +1151,10 @@ class VersionManager extends ChangeNotifier {
       _installProgress[key]!.message = 'Installation canceled';
       _installProgress[key]!.error = '';
       notifyListeners();
+      LogService.instance.warning(
+        'version',
+        'install canceled software=$software version=$version',
+      );
       _activeDownloadClients.remove(key)?.close(force: true);
       _cancelledInstalls.remove(key);
       return false;
@@ -1135,6 +1164,10 @@ class VersionManager extends ChangeNotifier {
         _installProgress[key]!.message = 'Installation canceled';
         _installProgress[key]!.error = '';
         notifyListeners();
+        LogService.instance.warning(
+          'version',
+          'install canceled software=$software version=$version',
+        );
         _activeDownloadClients.remove(key)?.close(force: true);
         _cancelledInstalls.remove(key);
         return false;
@@ -1143,6 +1176,11 @@ class VersionManager extends ChangeNotifier {
       _installProgress[key]!.error = e.toString();
       _installProgress[key]!.message = 'Failed to install $software $version';
       notifyListeners();
+      LogService.instance.error(
+        'version',
+        'install failed software=$software version=$version',
+        error: e,
+      );
       _activeDownloadClients.remove(key)?.close(force: true);
       _cancelledInstalls.remove(key);
       return false;
@@ -1315,6 +1353,10 @@ class VersionManager extends ChangeNotifier {
     final key = '$software-$version';
     _cancelledInstalls.add(key);
     _activeDownloadClients.remove(key)?.close(force: true);
+    LogService.instance.warning(
+      'version',
+      'cancel requested software=$software version=$version',
+    );
 
     final progress = _installProgress[key];
     if (progress != null &&

@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'log_service.dart';
 
 class AdminerService extends ChangeNotifier {
   static const int adminerPort = 8081;
@@ -27,15 +28,25 @@ class AdminerService extends ChangeNotifier {
       if (!await file.exists()) {
         isDownloading = true;
         notifyListeners();
+        LogService.instance.info('adminer', 'downloading adminer.php');
 
         final client = HttpClient();
-        final request = await client.getUrl(Uri.parse('https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php'));
+        final request = await client.getUrl(
+          Uri.parse(
+            'https://github.com/vrana/adminer/releases/download/v4.8.1/adminer-4.8.1.php',
+          ),
+        );
         final response = await request.close();
         await response.pipe(file.openWrite());
         client.close();
       }
     } catch (e) {
       if (kDebugMode) print('Failed to download Adminer: \$e');
+      LogService.instance.error(
+        'adminer',
+        'failed to download adminer',
+        error: e,
+      );
     } finally {
       isDownloading = false;
       notifyListeners();
@@ -49,13 +60,25 @@ class AdminerService extends ChangeNotifier {
     if (!isServerRunning) {
       final phpExe = Platform.isWindows ? 'php.exe' : 'php';
       final php = p.join(phpPath, phpExe);
-      
+
       try {
-        _serverProcess = await Process.start(php, ['-S', '127.0.0.1:$adminerPort'], workingDirectory: dir);
+        _serverProcess = await Process.start(php, [
+          '-S',
+          '127.0.0.1:$adminerPort',
+        ], workingDirectory: dir);
         isServerRunning = true;
         notifyListeners();
+        LogService.instance.info(
+          'adminer',
+          'server started on port=$adminerPort',
+        );
       } catch (e) {
         if (kDebugMode) print('Failed to start Adminer PHP Server: \$e');
+        LogService.instance.error(
+          'adminer',
+          'failed to start adminer server',
+          error: e,
+        );
       }
     }
 
@@ -71,5 +94,6 @@ class AdminerService extends ChangeNotifier {
     _serverProcess = null;
     isServerRunning = false;
     notifyListeners();
+    LogService.instance.info('adminer', 'server stopped');
   }
 }

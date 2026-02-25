@@ -2,13 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'log_service.dart';
 
 class DomainMapping {
   final String domain;
   final String projectPath;
   final int port;
 
-  DomainMapping({required this.domain, required this.projectPath, this.port = 80});
+  DomainMapping({
+    required this.domain,
+    required this.projectPath,
+    this.port = 80,
+  });
 
   String get url => port == 80 ? 'http://$domain' : 'http://$domain:$port';
 
@@ -44,15 +49,27 @@ class DomainService extends ChangeNotifier {
   }
 
   /// Add a custom domain mapping (e.g., example.com -> project path)
-  Future<bool> addDomain(String domain, String projectPath, {int port = 80}) async {
+  Future<bool> addDomain(
+    String domain,
+    String projectPath, {
+    int port = 80,
+  }) async {
     // Clean domain input
-    final cleanDomain = domain.replaceAll('http://', '').replaceAll('https://', '').replaceAll('/', '').trim();
+    final cleanDomain = domain
+        .replaceAll('http://', '')
+        .replaceAll('https://', '')
+        .replaceAll('/', '')
+        .trim();
     if (cleanDomain.isEmpty) return false;
 
     // Check for duplicates
     if (_mappings.any((m) => m.domain == cleanDomain)) return false;
 
-    final mapping = DomainMapping(domain: cleanDomain, projectPath: projectPath, port: port);
+    final mapping = DomainMapping(
+      domain: cleanDomain,
+      projectPath: projectPath,
+      port: port,
+    );
     _mappings.add(mapping);
 
     // Add to hosts file
@@ -87,7 +104,9 @@ class DomainService extends ChangeNotifier {
       final data = jsonDecode(raw) as List;
       _mappings
         ..clear()
-        ..addAll(data.map((e) => DomainMapping.fromJson(e as Map<String, dynamic>)));
+        ..addAll(
+          data.map((e) => DomainMapping.fromJson(e as Map<String, dynamic>)),
+        );
       notifyListeners();
     } catch (_) {}
   }
@@ -112,9 +131,15 @@ class DomainService extends ChangeNotifier {
       final newContent = '$content\n$entry\n';
       await hostsFile.writeAsString(newContent);
       debugPrint('[DomainService] Added $domain to hosts file');
+      LogService.instance.info('domain', 'added hosts mapping domain=$domain');
     } catch (e) {
       debugPrint('[DomainService] Error adding to hosts file: $e');
       debugPrint('[DomainService] You may need to run LocalX as Administrator');
+      LogService.instance.error(
+        'domain',
+        'failed to add hosts mapping domain=$domain',
+        error: e,
+      );
     }
   }
 
@@ -123,17 +148,32 @@ class DomainService extends ChangeNotifier {
     try {
       final hostsFile = File(hostsFilePath);
       final lines = await hostsFile.readAsLines();
-      final filtered = lines.where((line) => !line.contains('$domain    # LocalX')).toList();
+      final filtered = lines
+          .where((line) => !line.contains('$domain    # LocalX'))
+          .toList();
       await hostsFile.writeAsString(filtered.join('\n'));
       debugPrint('[DomainService] Removed $domain from hosts file');
+      LogService.instance.info(
+        'domain',
+        'removed hosts mapping domain=$domain',
+      );
     } catch (e) {
       debugPrint('[DomainService] Error removing from hosts file: $e');
+      LogService.instance.error(
+        'domain',
+        'failed to remove hosts mapping domain=$domain',
+        error: e,
+      );
     }
   }
 
   /// Generate a suggested domain name from project name
   static String suggestDomain(String projectName) {
-    final clean = projectName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9-]'), '-').replaceAll(RegExp(r'-+'), '-').replaceAll(RegExp(r'^-|-$'), '');
+    final clean = projectName
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9-]'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
     return '$clean.local';
   }
 }
